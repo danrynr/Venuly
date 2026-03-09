@@ -1,0 +1,40 @@
+{
+  "name": "venuly",
+  "version": "1.0.0",
+  "description": "Event Management Platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "tsx ./src/app.ts",
+    "dev": "nodemon tsx app.ts",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev",
+    "db:soft": "npx prisma db push && npx prisma db seed",
+    "db:hard": "npx prisma migrate reset && npx prisma db push && npx prisma db seed"
+  },
+  "author": "Daniel Reynard Kurniawan",
+  "license": "GPL-2.0-only",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/client": "^7.4.0",
+    "@vinejs/vine": "^2.1.0",
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.3.0",
+    "nodemon": "^3.1.14",
+    "prisma": "^7.4.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

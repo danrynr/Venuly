@@ -1,0 +1,183 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------
+// ------- RBAC Models -------
+// ---------------------------
+model User {
+  id             Int                 @id @default(autoincrement())
+  email          String              @unique
+  password       String
+  firstName      String
+  lastName       String?
+  referralCode   String              @unique
+  profilePicture String?
+  deleted        Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  deletedAt      DateTime?
+  userRoles      UserRole[]
+  authTokens     AuthToken[]
+  referrals      Referral[]          @relation("userReferrer") // A user who making the recommendation
+  referrees      Referral[]          @relation("userReferree") // A user who is being recommended
+  events         Event[]             @relation("EventCreator")
+  registrations  EventRegistration[]
+  userPoints     UserPoint[]
+  userCoupons    UserCoupon[]
+}
+
+model Role {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+}
+
+model Permission {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  roleId    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+}
+
+model RolePermission {
+  id           Int      @id @default(autoincrement())
+  roleId       Int
+  permissionId Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@unique([roleId, permissionId])
+}
+
+// -------------------------------------
+// ------- Authentication Models -------
+// -------------------------------------
+
+model AuthToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// --------------------------------------
+// ----- Referral & Rewards Models ------
+// --------------------------------------
+
+model Referral {
+  id         Int      @id @default(autoincrement())
+  referrerId Int // The user who is making the recommendation
+  reffereeId Int // The user who is being recommended
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userReferrer User @relation(name: "userReferrer", fields: [referrerId], references: [id])
+  userReferree User @relation(name: "userReferree", fields: [reffereeId], references: [id])
+}
+
+model UserPoint {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  points    BigInt    @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiredAt DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model UserCoupon {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  couponCode String
+  discount   Float
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  expiredAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+// --------------------------------------
+// ----- Event & Transaction Models -----
+// --------------------------------------
+enum EventType {
+  CONFERENCE
+  WORKSHOP
+  MEETUP
+  CONCERT
+  FESTIVAL
+}
+
+model Event {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  description   String
+  date          DateTime
+  location      String
+  image         String?
+  eventType     EventType
+  eventPaid     Boolean             @default(false)
+  eventPrice    BigInt              @default(0)
+  rating        Float               @default(0)
+  archived      Boolean             @default(false)
+  deleted       Boolean             @default(false)
+  createdBy     Int
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  archivedAt    DateTime?
+  deletedAt     DateTime?
+  creator       User                @relation(name: "EventCreator", fields: [createdBy], references: [id])
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  eventId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+}
