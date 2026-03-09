@@ -105,17 +105,28 @@ export const registerController = async (req: Request, res: Response) => {
       },
     });
 
+    // Assign default role 'customer'
+    const customerRole = await prisma.role.findFirst({ where: { name: "customer" } });
+    if (customerRole) {
+      await prisma.userRole.create({
+        data: {
+          userId: user.id,
+          roleId: customerRole.id,
+        },
+      });
+    }
+
     if (referralUser) {
       prisma.$transaction(
-        async (prisma) => {
-          await prisma.referral.create({
+        async (tx) => {
+          await tx.referral.create({
             data: {
               referrerId: referralUser.id,
               reffereeId: user.id,
             },
           });
 
-          await prisma.userPoint.create({
+          await tx.userPoint.create({
             data: {
               userId: referralUser.id,
               points: parseInt(process.env.POINT_PER_USER!), // Award points to the referrer
@@ -123,7 +134,7 @@ export const registerController = async (req: Request, res: Response) => {
             },
           });
 
-          await prisma.userCoupon.create({
+          await tx.userCoupon.create({
             data: {
               userId: user.id,
               couponCode: generateCouponCode("COUP"), // Generate a coupon code for the new user
@@ -179,16 +190,16 @@ export const loginController = async (req: Request, res: Response) => {
 
     const { email, password } = validatedData;
 
-    if (!email || !password) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Email and password are required.",
-      });
-      return res.status(400).send(response);
-    }
-
-    const user = await prisma.user.findFirst({ where: { email } });
+    const user = await prisma.user.findFirst({
+      where: { email },
+      include: {
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
 
     if (!user) {
       const response = responseFormatter({
@@ -210,8 +221,10 @@ export const loginController = async (req: Request, res: Response) => {
       return res.status(401).send(response);
     }
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const roles = user.userRoles.map((ur) => ur.role.name);
+
+    const accessToken = generateAccessToken(user, roles);
+    const refreshToken = generateRefreshToken(user, roles);
 
     // Store the refresh token in the database
     await prisma.authToken.create({
@@ -228,6 +241,7 @@ export const loginController = async (req: Request, res: Response) => {
       data: {
         accessToken,
         refreshToken,
+        roles,
       },
     });
     res.status(200).send(response);
@@ -295,6 +309,13 @@ export const refreshController = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findFirst({
       where: { id: decoded.userId },
+      include: {
+        userRoles: {
+          include: {
+            role: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -306,9 +327,11 @@ export const refreshController = async (req: Request, res: Response) => {
       return res.status(403).send(response);
     }
 
+    const roles = user.userRoles.map((ur) => ur.role.name);
+
     // Generate new access token
-    const newAccessToken = generateAccessToken(user);
-    const newRefreshToken = generateRefreshToken(user);
+    const newAccessToken = generateAccessToken(user, roles);
+    const newRefreshToken = generateRefreshToken(user, roles);
 
     // Store the new refresh token in the database and invalidate the old one
     await prisma.$transaction([
@@ -330,6 +353,7 @@ export const refreshController = async (req: Request, res: Response) => {
       data: {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
+        roles,
       },
     });
     res.status(200).send(response);

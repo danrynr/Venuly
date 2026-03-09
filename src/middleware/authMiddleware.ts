@@ -8,6 +8,7 @@ declare global {
     interface Request {
       user?: {
         userId: number;
+        roles: string[];
       };
     }
   }
@@ -42,6 +43,9 @@ export const authenticateToken = (
   }
 
   console.log("Decoded user from token:", decodedUser);
-  req.user = { userId: decodedUser.userId };
+  req.user = { 
+    userId: decodedUser.userId,
+    roles: decodedUser.roles
+  };
   next();
 };

@@ -11,12 +11,13 @@ const alg = "HS256"; // HMAC SHA-256 algorithm for signing tokens
 
 interface TokenPayload {
   userId: number;
-  // Add other necessary user data to the token payload
+  roles: string[];
 }
 
-export const generateAccessToken = (user: User): string => {
+export const generateAccessToken = (user: any, roles: string[]): string => {
   const payload: TokenPayload = {
     userId: user.id,
+    roles,
   };
 
   console.log(
@@ -29,9 +30,10 @@ export const generateAccessToken = (user: User): string => {
   });
 };
 
-export const generateRefreshToken = (user: User): string => {
+export const generateRefreshToken = (user: any, roles: string[]): string => {
   const payload: TokenPayload = {
     userId: user.id,
+    roles,
   };
 
   console.log(
