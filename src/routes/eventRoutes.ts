@@ -4,17 +4,21 @@ import {
   updateEventController,
   registerEventController,
   leaveEventController,
+  eventListController,
 } from "../controllers/eventController";
 import { authenticateToken } from "../middleware/authMiddleware";
+import multer from "multer";
 
-const router = Router();
+const eventRouter: Router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 // All event routes require authentication
-router.use(authenticateToken);
+eventRouter.use(authenticateToken);
 
-router.post("/create", createEventController);
-router.put("/:id/update", updateEventController);
-router.post("/:id/register", registerEventController);
-router.post("/:id/leave", leaveEventController);
+eventRouter.get("/list", eventListController);
+eventRouter.post("/create", upload.single("image"), createEventController);
+eventRouter.put("/:id/update", upload.none(), updateEventController);
+eventRouter.post("/:id/register", registerEventController);
+eventRouter.post("/:id/leave", leaveEventController);
 
-export default router;
+export default eventRouter;

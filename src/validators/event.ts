@@ -6,8 +6,7 @@ export const createEventValidator = vine.compile(
     description: vine.string().minLength(10).maxLength(5000),
     date: vine.date(),
     location: vine.string().minLength(3).maxLength(255),
-    image_url: vine.string().url().optional(),
-    event_paid: vine.enum([true, false]),
+    event_paid: vine.boolean(),
     event_type: vine.enum([
       "CONFERENCE",
       "WORKSHOP",
@@ -25,18 +24,29 @@ export const updateEventValidator = vine.compile(
     description: vine.string().minLength(10).maxLength(5000).optional(),
     date: vine.date().optional(),
     location: vine.string().minLength(3).maxLength(255).optional(),
-    image_url: vine.string().url().optional(),
     event_type: vine
       .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
       .optional(),
-    event_paid: vine.enum([true, false]).optional(),
+    event_paid: vine.boolean().optional(),
     price: vine.number().min(0).optional(),
+    image_url: vine.string().url().optional(),
   }),
 );
 
 export const eventIdValidator = vine.compile(
   vine.object({
     id: vine.number().positive(),
+  }),
+);
+
+export const listEventsValidator = vine.compile(
+  vine.object({
+    status: vine.enum(["all", "active", "passed"]).optional(),
+    search: vine.string().optional(),
+    e_paid: vine.boolean().optional(),
+    e_type: vine
+      .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
+      .optional(),
   }),
 );
 
@@ -49,7 +59,9 @@ vine.messagesProvider = new SimpleMessagesProvider({
   "location.minLength": "Location must be at least 3 characters long.",
   "location.maxLength": "Location must be at most 255 characters long.",
   "image_url.url": "Please provide a valid URL for the event image.",
-  "event_type.enum": "Event type must be either 'free' or 'paid'.",
+  "event_type.enum":
+    "Event type must be one of: CONFERENCE, WORKSHOP, MEETUP, CONCERT, FESTIVAL.",
+  "event_paid.boolean": "Event paid status must be a boolean.",
   "price.number": "Price must be a valid number.",
   "price.min": "Price cannot be negative.",
   "id.positive": "Event ID must be a positive number.",

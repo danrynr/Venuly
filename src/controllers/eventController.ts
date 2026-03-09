@@ -5,31 +5,117 @@ import {
   createEventValidator,
   eventIdValidator,
   updateEventValidator,
+  listEventsValidator,
 } from "../validators/event";
+import { uploadStream } from "../service/cloudinary";
+
+export const eventListController = async (req: Request, res: Response) => {
+  try {
+    let validatedQuery;
+    try {
+      validatedQuery = await listEventsValidator.validate(req.query);
+    } catch (err: any) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: err.messages || "Invalid query parameters.",
+        }),
+      );
+    }
+
+    const { status, search, e_paid, e_type } = validatedQuery;
+    const now = new Date();
+
+    const where: any = {
+      deleted: false,
+      archived: false,
+    };
+
+    if (search) {
+      where.name = {
+        contains: search,
+        mode: "insensitive",
+      };
+    }
+
+    if (e_paid !== undefined) {
+      where.eventPaid = e_paid;
+    }
+
+    if (e_type) {
+      where.eventType = e_type;
+    }
+
+    if (status === "active") {
+      where.date = {
+        gt: now,
+      };
+    } else if (status === "passed") {
+      where.date = {
+        lt: now,
+      };
+    }
+
+    const events = await prisma.event.findMany({
+      where,
+      orderBy: {
+        date: "asc",
+      },
+    });
+
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Events retrieved successfully.",
+        data: events,
+      }),
+    );
+  } catch (error: any) {
+    console.error("List events error:", error);
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: error.message || "Internal server error.",
+      }),
+    );
+  }
+};
 
 export const createEventController = async (req: Request, res: Response) => {
   try {
+    const userId = req.user!.userId;
     let validatedData;
+
     try {
       validatedData = await createEventValidator.validate(req.body);
     } catch (err: any) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: err.messages,
-      });
-      return res.status(400).send(response);
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: err.messages || "Validation failed.",
+          data: err.errors,
+        }),
+      );
     }
-    const {
-      name,
-      description,
-      date,
-      location,
-      image_url,
-      event_type,
-      event_paid,
-      price,
-    } = validatedData;
+
+    if (!req.file) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "No file uploaded.",
+        }),
+      );
+    }
+
+    const { name, description, date, location, event_type, event_paid, price } =
+      validatedData;
+
+    const uploadResult = await uploadStream(req.file.buffer, "events");
 
     const event = await prisma.event.create({
       data: {
@@ -37,29 +123,31 @@ export const createEventController = async (req: Request, res: Response) => {
         description,
         date,
         location,
-        image: image_url,
+        image: uploadResult.secure_url,
         eventType: event_type,
         eventPaid: event_paid,
-        eventPrice: BigInt(price || 0),
-        createdBy: req.user!.userId,
+        eventPrice: BigInt(Math.round(price || 0)),
+        createdBy: userId,
       },
     });
 
-    const response = responseFormatter({
-      code: 201,
-      status: "success",
-      message: "Event created successfully.",
-      data: { ...event, eventPrice: event.eventPrice.toString() },
-    });
-    return res.status(201).send(response);
+    return res.status(201).send(
+      responseFormatter({
+        code: 201,
+        status: "success",
+        message: "Event created successfully.",
+        data: event,
+      }),
+    );
   } catch (error: any) {
-    const response = responseFormatter({
-      code: 500,
-      status: "error",
-      message: error.messages || "Internal server error.",
-      data: error,
-    });
-    return res.status(500).send(response);
+    console.error("Create event error:", error);
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: error.message || "Internal server error.",
+      }),
+    );
   }
 };
 
@@ -79,6 +167,17 @@ export const updateEventController = async (req: Request, res: Response) => {
       });
       return res.status(400).send(response);
     }
+
+    const {
+      name,
+      description,
+      date,
+      location,
+      event_type,
+      event_paid,
+      price,
+      image_url,
+    } = validatedData;
 
     const event = await prisma.event.findUnique({
       where: { id: validatedId.id },
@@ -107,17 +206,14 @@ export const updateEventController = async (req: Request, res: Response) => {
     const updatedEvent = await prisma.event.update({
       where: { id: validatedId.id },
       data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        date: validatedData.date,
-        location: validatedData.location,
-        image: validatedData.image_url,
-        eventType: validatedData.event_type,
-        eventPaid: validatedData.event_paid,
-        eventPrice:
-          validatedData.price !== undefined
-            ? BigInt(validatedData.price)
-            : undefined,
+        name: name,
+        description: description,
+        date: date,
+        location: location,
+        image: image_url,
+        eventType: event_type,
+        eventPaid: event_paid,
+        eventPrice: price !== undefined ? BigInt(Math.round(price)) : undefined,
       },
     });
 
@@ -137,7 +233,7 @@ export const updateEventController = async (req: Request, res: Response) => {
       responseFormatter({
         code: 500,
         status: "error",
-        message: error.messages || "Internal server error.",
+        message: error.message || "Internal server error.",
         data: error,
       }),
     );

@@ -35,10 +35,7 @@ export const uploadStream = (
         if (result) resolve(result);
       }
     );
-    const readableStream = new Readable();
-    readableStream.push(buffer);
-    readableStream.push(null);
-    readableStream.pipe(upload);
+    Readable.from(buffer).pipe(upload);
   });
 };
 
