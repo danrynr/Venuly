@@ -8,6 +8,7 @@
     "dev": "nodemon tsx app.ts",
     "db:generate": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev",
+    "db:migrate:reset": "npx prisma migrate reset",
     "db:soft": "npx prisma db push && npx prisma db seed",
     "db:hard": "npx prisma migrate reset && npx prisma db push && npx prisma db seed"
   },

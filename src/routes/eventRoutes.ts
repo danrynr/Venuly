@@ -1,4 +1,5 @@
 import { Router } from "express";
+import multer from "multer";
 import {
   createEventController,
   updateEventController,
@@ -7,7 +8,6 @@ import {
   eventListController,
 } from "../controllers/eventController";
 import { authenticateToken } from "../middleware/authMiddleware";
-import multer from "multer";
 
 const eventRouter: Router = Router();
 const upload = multer({ storage: multer.memoryStorage() });

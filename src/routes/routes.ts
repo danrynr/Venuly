@@ -4,6 +4,7 @@ import { requestLogger } from "../middleware/requestLogger"; // Assuming this ex
 import authRouter from "./authRoutes"; // Import the new auth router
 import profileRouter from "./profileRoutes"; // Import the new profile router
 import eventRouter from "./eventRoutes"; // Import the new event router
+import orderRouter from "./orderRoutes"; // Import the new order router
 
 const router: Router = Router();
 
@@ -24,5 +25,6 @@ router.get("/status", (req: Request, res: Response) => {
 router.use("/auth", authRouter); // Use the new auth router
 router.use("/profile", profileRouter); // Use the profile router
 router.use("/event", eventRouter); // Use the event router
+router.use("/order", orderRouter); // Use the order router
 
 export default router;

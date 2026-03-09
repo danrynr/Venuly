@@ -29,11 +29,6 @@ export const getProfile = async (req: Request, res: Response) => {
         referralCode: true,
         createdAt: true,
         updatedAt: true,
-        userRoles: {
-          include: {
-            role: true,
-          },
-        },
       },
     });
 
@@ -46,14 +41,11 @@ export const getProfile = async (req: Request, res: Response) => {
       return res.status(404).send(response);
     }
 
-    const roles = user.userRoles.map((ur) => ur.role.name);
-    const { userRoles, ...userProfile } = user;
-
     const response = responseFormatter({
       code: 200,
       status: "success",
       message: "User profile retrieved successfully.",
-      data: { ...userProfile, roles },
+      data: user,
     });
     res.status(200).send(response);
   } catch (error) {
@@ -81,7 +73,7 @@ export const updateProfile = async (req: Request, res: Response) => {
     }
 
     console.log("Request Body:", req.body);
-    
+
     let validatedData;
     try {
       validatedData = await updateProfileValidator.validate(req.body);

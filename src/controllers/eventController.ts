@@ -89,8 +89,17 @@ export const createEventController = async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     let validatedData;
 
+    // Manually parse fields because multipart/form-data sends everything as strings
+    const dataToValidate = {
+      ...req.body,
+      event_paid:
+        req.body.event_paid === "true" || req.body.event_paid === "1" || req.body.event_paid === true,
+      price: req.body.price ? Number(req.body.price) : undefined,
+      capacity: req.body.capacity ? Number(req.body.capacity) : undefined,
+    };
+
     try {
-      validatedData = await createEventValidator.validate(req.body);
+      validatedData = await createEventValidator.validate(dataToValidate);
     } catch (err: any) {
       return res.status(400).send(
         responseFormatter({
@@ -112,7 +121,7 @@ export const createEventController = async (req: Request, res: Response) => {
       );
     }
 
-    const { name, description, date, location, event_type, event_paid, price } =
+    const { name, description, date, location, event_type, event_paid, price, capacity } =
       validatedData;
 
     const uploadResult = await uploadStream(req.file.buffer, "events");
@@ -127,6 +136,7 @@ export const createEventController = async (req: Request, res: Response) => {
         eventType: event_type,
         eventPaid: event_paid,
         eventPrice: BigInt(Math.round(price || 0)),
+        capacity: capacity,
         createdBy: userId,
       },
     });
@@ -156,16 +166,31 @@ export const updateEventController = async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     let validatedId;
     let validatedData;
+
     try {
       validatedId = await eventIdValidator.validate(req.params);
-      validatedData = await updateEventValidator.validate(req.body);
+
+      // Manually parse fields because multipart/form-data sends everything as strings
+      const dataToValidate = {
+        ...req.body,
+        event_paid:
+          req.body.event_paid !== undefined
+            ? req.body.event_paid === "true" || req.body.event_paid === "1" || req.body.event_paid === true
+            : undefined,
+        price: req.body.price !== undefined ? Number(req.body.price) : undefined,
+        capacity: req.body.capacity !== undefined ? Number(req.body.capacity) : undefined,
+      };
+
+      validatedData = await updateEventValidator.validate(dataToValidate);
     } catch (err: any) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: err.messages,
-      });
-      return res.status(400).send(response);
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: err.messages || "Validation failed.",
+          data: err.errors,
+        }),
+      );
     }
 
     const {
@@ -176,6 +201,7 @@ export const updateEventController = async (req: Request, res: Response) => {
       event_type,
       event_paid,
       price,
+      capacity,
       image_url,
     } = validatedData;
 
@@ -214,6 +240,7 @@ export const updateEventController = async (req: Request, res: Response) => {
         eventType: event_type,
         eventPaid: event_paid,
         eventPrice: price !== undefined ? BigInt(Math.round(price)) : undefined,
+        capacity: capacity,
       },
     });
 

@@ -6,6 +6,7 @@ import rolePermissionSeeder from "./seed/rolePermission";
 import userSeeder from "./seed/user";
 import userRoleSeeder from "./seed/userRole";
 import eventSeeder from "./seed/event";
+import orderSeeder from "./seed/order";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -19,6 +20,7 @@ async function seeder() {
   await userSeeder();
   await userRoleSeeder();
   await eventSeeder();
+  await orderSeeder();
 }
 
 seeder()

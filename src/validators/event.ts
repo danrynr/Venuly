@@ -15,6 +15,7 @@ export const createEventValidator = vine.compile(
       "FESTIVAL",
     ]),
     price: vine.number().min(0).optional(),
+    capacity: vine.number().min(1),
   }),
 );
 
@@ -29,6 +30,7 @@ export const updateEventValidator = vine.compile(
       .optional(),
     event_paid: vine.boolean().optional(),
     price: vine.number().min(0).optional(),
+    capacity: vine.number().min(1).optional(),
     image_url: vine.string().url().optional(),
   }),
 );

@@ -106,7 +106,9 @@ export const registerController = async (req: Request, res: Response) => {
     });
 
     // Assign default role 'customer'
-    const customerRole = await prisma.role.findFirst({ where: { name: "customer" } });
+    const customerRole = await prisma.role.findFirst({
+      where: { name: "customer" },
+    });
     if (customerRole) {
       await prisma.userRole.create({
         data: {
@@ -241,7 +243,6 @@ export const loginController = async (req: Request, res: Response) => {
       data: {
         accessToken,
         refreshToken,
-        roles,
       },
     });
     res.status(200).send(response);
@@ -353,7 +354,6 @@ export const refreshController = async (req: Request, res: Response) => {
       data: {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
-        roles,
       },
     });
     res.status(200).send(response);
