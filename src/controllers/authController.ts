@@ -405,28 +405,24 @@ export const changePasswordController = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return res
-        .status(404)
-        .send(
-          responseFormatter({
-            code: 404,
-            status: "error",
-            message: "User not found.",
-          }),
-        );
+      return res.status(404).send(
+        responseFormatter({
+          code: 404,
+          status: "error",
+          message: "User not found.",
+        }),
+      );
     }
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res
-        .status(400)
-        .send(
-          responseFormatter({
-            code: 400,
-            status: "error",
-            message: "Current password incorrect.",
-          }),
-        );
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Current password incorrect.",
+        }),
+      );
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
@@ -435,25 +431,21 @@ export const changePasswordController = async (req: Request, res: Response) => {
       data: { password: hashedNewPassword },
     });
 
-    return res
-      .status(200)
-      .send(
-        responseFormatter({
-          code: 200,
-          status: "success",
-          message: "Password updated successfully.",
-        }),
-      );
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Password updated successfully.",
+      }),
+    );
   } catch (error: any) {
-    return res
-      .status(400)
-      .send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: error.messages || "Request failed.",
-        }),
-      );
+    return res.status(400).send(
+      responseFormatter({
+        code: 400,
+        status: "error",
+        message: error.messages || "Request failed.",
+      }),
+    );
   }
 };
 
@@ -463,15 +455,13 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res
-        .status(200)
-        .send(
-          responseFormatter({
-            code: 200,
-            status: "success",
-            message: "If that email exists, a reset link has been sent.",
-          }),
-        );
+      return res.status(200).send(
+        responseFormatter({
+          code: 200,
+          status: "success",
+          message: "If that email exists, a reset link has been sent.",
+        }),
+      );
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -482,7 +472,8 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
       data: { resetPasswordToken: token, resetPasswordExpires: expires },
     });
 
-    const resetLink = `http://localhost:3000/api/auth/reset-password?token=${token}`;
+    const frontendUrl = process.env.FRONTEND_URL;
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
     await sendMail(
       user.email,
@@ -490,25 +481,21 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
       `<p>You requested a password reset. Click <a href="${resetLink}">here</a> to reset your password. This link expires in 1 hour.</p>`,
     );
 
-    return res
-      .status(200)
-      .send(
-        responseFormatter({
-          code: 200,
-          status: "success",
-          message: "Reset link sent to your email.",
-        }),
-      );
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Reset link sent to your email.",
+      }),
+    );
   } catch (error: any) {
-    return res
-      .status(400)
-      .send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: error.messages || "Request failed.",
-        }),
-      );
+    return res.status(400).send(
+      responseFormatter({
+        code: 400,
+        status: "error",
+        message: error.messages || "Request failed.",
+      }),
+    );
   }
 };
 
@@ -526,15 +513,13 @@ export const resetPasswordController = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res
-        .status(400)
-        .send(
-          responseFormatter({
-            code: 400,
-            status: "error",
-            message: "Invalid or expired reset token.",
-          }),
-        );
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Invalid or expired reset token.",
+        }),
+      );
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
@@ -547,24 +532,20 @@ export const resetPasswordController = async (req: Request, res: Response) => {
       },
     });
 
-    return res
-      .status(200)
-      .send(
-        responseFormatter({
-          code: 200,
-          status: "success",
-          message: "Password reset successfully. You can now log in.",
-        }),
-      );
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Password reset successfully. You can now log in.",
+      }),
+    );
   } catch (error: any) {
-    return res
-      .status(400)
-      .send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: error.messages || "Request failed.",
-        }),
-      );
+    return res.status(400).send(
+      responseFormatter({
+        code: 400,
+        status: "error",
+        message: error.messages || "Request failed.",
+      }),
+    );
   }
 };

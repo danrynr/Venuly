@@ -4,8 +4,8 @@ async function reviewSeeder() {
   const registrations = await prisma.eventRegistration.findMany({
     take: 10,
     include: {
-      event: true
-    }
+      event: true,
+    },
   });
 
   if (registrations.length === 0) {
@@ -29,30 +29,30 @@ async function reviewSeeder() {
     const existing = await prisma.review.findUnique({
       where: {
         userId_eventId: {
-          userId: reg.userId,
-          eventId: reg.eventId
-        }
-      }
+          userId: reg!.userId,
+          eventId: reg!.eventId,
+        },
+      },
     });
 
     if (!existing) {
       const review = await prisma.review.create({
         data: {
-          userId: reg.userId,
-          eventId: reg.eventId,
-          rating: reviewData.rating,
-          comment: reviewData.comment,
-        }
+          userId: reg!.userId,
+          eventId: reg!.eventId,
+          rating: reviewData!.rating,
+          comment: reviewData!.comment,
+        },
       });
 
       // Update event rating
       const aggregate = await prisma.review.aggregate({
-        where: { eventId: reg.eventId },
+        where: { eventId: reg!.eventId },
         _avg: { rating: true },
       });
 
       await prisma.event.update({
-        where: { id: reg.eventId },
+        where: { id: reg!.eventId },
         data: { rating: aggregate._avg.rating || 0 },
       });
     }

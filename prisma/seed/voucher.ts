@@ -17,21 +17,21 @@ async function voucherSeeder() {
       discount: 10,
       startDate: new Date(),
       endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      eventId: events[0].id,
+      eventId: events[0]!.id,
     },
     {
       code: "MUSIC20",
       discount: 20,
       startDate: new Date(),
       endDate: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
-      eventId: events[1].id,
+      eventId: events[1]!.id,
     },
     {
       code: "SEMINAR50",
       discount: 50,
       startDate: new Date(),
       endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000), // 15 days from now
-      eventId: events[3].id,
+      eventId: events[3]!.id,
     },
   ];
 
