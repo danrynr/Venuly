@@ -43,16 +43,19 @@ export const authenticateToken = (
   }
 
   console.log("Decoded user from token:", decodedUser);
-  req.user = { 
+  req.user = {
     userId: decodedUser.userId,
-    roles: decodedUser.roles
+    roles: decodedUser.roles,
   };
   next();
 };
 
 export const hasRole = (roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !req.user.roles.some((role) => roles.includes(role))) {
+    if (
+      !req.user ||
+      !req.user.roles.some((role) => roles.includes(role.toUpperCase()))
+    ) {
       return res.status(403).send(
         responseFormatter({
           code: 403,

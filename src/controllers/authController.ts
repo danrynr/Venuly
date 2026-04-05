@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { prisma } from "../service/prisma";
 import { responseFormatter } from "../middleware/responseFormatter";
+import { sendMail } from "../service/mail";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -15,6 +17,9 @@ import {
   loginValidator,
   refreshTokenValidator,
   registerValidator,
+  changePasswordValidator,
+  forgotPasswordValidator,
+  resetPasswordValidator,
 } from "../validators/auth";
 
 const SALT_ROUNDS = Number(process.env.SALT_ROUNDS) || 10;
@@ -129,7 +134,11 @@ export const registerController = async (req: Request, res: Response) => {
     }
 
     if (referralUser) {
-      prisma.$transaction(
+      // Correct date logic for 3 months
+      const threeMonthsFromNow = new Date();
+      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
+
+      await prisma.$transaction(
         async (tx) => {
           await tx.referral.create({
             data: {
@@ -141,22 +150,22 @@ export const registerController = async (req: Request, res: Response) => {
           await tx.userPoint.create({
             data: {
               userId: referralUser.id,
-              points: parseInt(process.env.POINT_PER_USER!), // Award points to the referrer
-              expiredAt: new Date(Date.now() + "3months"), // Set expiration date for points (3 months from now)
+              points: parseInt(process.env.POINT_PER_USER!) || 10000,
+              expiredAt: threeMonthsFromNow,
             },
           });
 
           await tx.userCoupon.create({
             data: {
               userId: user.id,
-              couponCode: generateCouponCode("COUP"), // Generate a coupon code for the new user
-              discount: parseInt(process.env.REFERRAL_DISCOUNT_AMOUNT!), // Set discount amount for the coupon
-              expiredAt: new Date(Date.now() + "3months"), // Set expiration date for the coupon (3 months from now)
+              couponCode: generateCouponCode("COUP"),
+              discount: parseInt(process.env.REFERRAL_DISCOUNT_AMOUNT!) || 10,
+              expiredAt: threeMonthsFromNow,
             },
           });
         },
         { isolationLevel: "Serializable" },
-      ); // Use Serializable isolation level to prevent race conditions
+      );
     }
 
     if (!user) {
@@ -175,11 +184,11 @@ export const registerController = async (req: Request, res: Response) => {
     });
     res.status(201).send(response);
   } catch (error: any) {
+    console.error("Registration error:", error);
     const response = responseFormatter({
       code: 500,
       status: "error",
       message: "Internal server error.",
-      data: error,
     });
     res.status(500).send(response);
   }
@@ -271,7 +280,6 @@ export const loginController = async (req: Request, res: Response) => {
 export const refreshController = async (req: Request, res: Response) => {
   try {
     let validatedData;
-    console.log("Received refresh token request with body:", req.body);
     try {
       validatedData = await refreshTokenValidator.validate(req.body);
     } catch (err: any) {
@@ -284,16 +292,7 @@ export const refreshController = async (req: Request, res: Response) => {
     }
     const { refreshToken } = validatedData;
 
-    if (!refreshToken) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Refresh token is required.",
-      });
-      return res.status(400).send(response);
-    }
-    console.log("Received refresh token:", refreshToken);
-    const decoded = verifyRefreshToken(refreshToken); // This now only verifies signature
+    const decoded = verifyRefreshToken(refreshToken);
 
     if (!decoded) {
       const response = responseFormatter({
@@ -304,7 +303,6 @@ export const refreshController = async (req: Request, res: Response) => {
       return res.status(403).send(response);
     }
 
-    // Validate refresh token against database
     const storedAuthToken = await prisma.authToken.findFirst({
       where: { token: refreshToken, userId: decoded.userId },
     });
@@ -340,11 +338,9 @@ export const refreshController = async (req: Request, res: Response) => {
 
     const roles = user.userRoles.map((ur) => ur.role.name);
 
-    // Generate new access token
     const newAccessToken = generateAccessToken(user, roles);
     const newRefreshToken = generateRefreshToken(user, roles);
 
-    // Store the new refresh token in the database and invalidate the old one
     await prisma.$transaction([
       prisma.authToken.deleteMany({
         where: { userId: user.id },
@@ -391,7 +387,6 @@ export const logoutController = async (req: Request, res: Response) => {
       return res.status(400).send(response);
     }
 
-    // Invalidate refresh token from the database
     await prisma.authToken.deleteMany({
       where: { userId: req.user?.userId },
     });
@@ -410,5 +405,98 @@ export const logoutController = async (req: Request, res: Response) => {
       message: "Internal server error.",
     });
     res.status(500).send(response);
+  }
+};
+
+// ------------------------- Password Management ----------------------
+
+export const changePasswordController = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { oldPassword, newPassword } = await changePasswordValidator.validate(req.body);
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "User not found." }));
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Current password incorrect." }));
+    }
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword },
+    });
+
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Password updated successfully." }));
+  } catch (error: any) {
+    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
+  }
+};
+
+export const forgotPasswordController = async (req: Request, res: Response) => {
+  try {
+    const { email } = await forgotPasswordValidator.validate(req.body);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Don't leak user existence in production, but requirement says "reset if forgotten"
+      return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "If that email exists, a reset link has been sent." }));
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetPasswordToken: token, resetPasswordExpires: expires },
+    });
+
+    // In a real app, this would be a link to your frontend
+    const resetLink = `http://localhost:3000/api/auth/reset-password?token=${token}`;
+    
+    await sendMail(
+      user.email,
+      "Password Reset Request",
+      `<p>You requested a password reset. Click <a href="${resetLink}">here</a> to reset your password. This link expires in 1 hour.</p>`
+    );
+
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Reset link sent to your email." }));
+  } catch (error: any) {
+    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
+  }
+};
+
+export const resetPasswordController = async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = await resetPasswordValidator.validate(req.body);
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: token,
+        resetPasswordExpires: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Invalid or expired reset token." }));
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
+
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Password reset successfully. You can now log in." }));
+  } catch (error: any) {
+    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
   }
 };

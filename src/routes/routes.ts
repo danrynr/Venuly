@@ -6,6 +6,7 @@ import profileRouter from "./profileRoutes"; // Import the new profile router
 import eventRouter from "./eventRoutes"; // Import the new event router
 import orderRouter from "./orderRoutes"; // Import the new order router
 import reviewRouter from "./reviewRoutes"; // Import the review router
+import dashboardRouter from "./dashboardRoutes"; // Import the dashboard router
 
 const router: Router = Router();
 
@@ -22,11 +23,12 @@ router.get("/status", (req: Request, res: Response) => {
   res.send(response);
 });
 
-// Auth Routes
-router.use("/auth", authRouter); // Use the new auth router
-router.use("/profile", profileRouter); // Use the profile router
-router.use("/event", eventRouter); // Use the event router
-router.use("/order", orderRouter); // Use the order router
-router.use("/review", reviewRouter); // Use the review router
+// Routes
+router.use("/auth", authRouter);
+router.use("/profile", profileRouter);
+router.use("/event", eventRouter);
+router.use("/order", orderRouter);
+router.use("/review", reviewRouter);
+router.use("/dashboard", dashboardRouter);
 
 export default router;

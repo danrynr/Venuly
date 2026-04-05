@@ -20,7 +20,16 @@ async function roleSeeder() {
     },
   });
 
-  console.log("Seeded roles:", { customer, organizer });
+  const admin = await prisma.role.upsert({
+    where: { name: "admin" },
+    update: {},
+    create: {
+      name: "admin",
+      description: "An admin role with permissions to manage everything.",
+    },
+  });
+
+  console.log("Seeded roles:", { customer, organizer, admin });
 }
 
 export default roleSeeder;

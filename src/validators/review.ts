@@ -1,9 +1,9 @@
-import vine from '@vinejs/vine'
+import vine from "@vinejs/vine";
 
 export const createReviewValidator = vine.compile(
   vine.object({
-    eventId: vine.number(),
+    event_id: vine.number(),
     rating: vine.number().min(1).max(5),
     comment: vine.string().trim().optional(),
-  })
-)
+  }),
+);

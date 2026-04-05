@@ -84,12 +84,12 @@ export const eventListController = async (req: Request, res: Response) => {
   }
 };
 
+// --- STEP 1: Create Event (Metadata only) ---
 export const createEventController = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
     let validatedData;
 
-    // Manually parse fields because multipart/form-data sends everything as strings
     const dataToValidate = {
       ...req.body,
       event_paid:
@@ -111,28 +111,16 @@ export const createEventController = async (req: Request, res: Response) => {
       );
     }
 
-    if (!req.file) {
-      return res.status(400).send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: "No file uploaded.",
-        }),
-      );
-    }
-
-    const { name, description, date, location, event_type, event_paid, price, capacity } =
+    const { name, description, date, end_date, location, event_type, event_paid, price, capacity } =
       validatedData;
-
-    const uploadResult = await uploadStream(req.file.buffer, "events");
 
     const event = await prisma.event.create({
       data: {
         name,
         description,
         date,
+        endDate: end_date || null,
         location,
-        image: uploadResult.secure_url,
         eventType: event_type,
         eventPaid: event_paid,
         eventPrice: BigInt(Math.round(price || 0)),
@@ -145,8 +133,11 @@ export const createEventController = async (req: Request, res: Response) => {
       responseFormatter({
         code: 201,
         status: "success",
-        message: "Event created successfully.",
-        data: event,
+        message: "Event created successfully. You can now upload the image.",
+        data: {
+            ...event,
+            eventPrice: event.eventPrice.toString()
+        },
       }),
     );
   } catch (error: any) {
@@ -161,6 +152,70 @@ export const createEventController = async (req: Request, res: Response) => {
   }
 };
 
+// --- STEP 2: Upload Event Image (Separate request) ---
+export const uploadEventImageController = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const eventId = Number(req.params.id);
+
+        if (!req.file) {
+            return res.status(400).send(
+                responseFormatter({
+                    code: 400,
+                    status: "error",
+                    message: "No image file provided.",
+                }),
+            );
+        }
+
+        const event = await prisma.event.findUnique({ where: { id: eventId } });
+
+        if (!event) {
+            return res.status(404).send(
+                responseFormatter({
+                    code: 404,
+                    status: "error",
+                    message: "Event not found.",
+                }),
+            );
+        }
+
+        if (event.createdBy !== userId) {
+            return res.status(403).send(
+                responseFormatter({
+                    code: 403,
+                    status: "error",
+                    message: "Unauthorized.",
+                }),
+            );
+        }
+
+        const uploadResult = await uploadStream(req.file.buffer, "events");
+
+        const updatedEvent = await prisma.event.update({
+            where: { id: eventId },
+            data: { image: uploadResult.secure_url },
+        });
+
+        return res.status(200).send(
+            responseFormatter({
+                code: 200,
+                status: "success",
+                message: "Image uploaded successfully.",
+                data: { image: updatedEvent.image },
+            }),
+        );
+    } catch (error: any) {
+        return res.status(500).send(
+            responseFormatter({
+                code: 500,
+                status: "error",
+                message: error.message || "Internal server error.",
+            }),
+        );
+    }
+};
+
 export const updateEventController = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
@@ -170,7 +225,7 @@ export const updateEventController = async (req: Request, res: Response) => {
     try {
       validatedId = await eventIdValidator.validate(req.params);
 
-      // Manually parse fields because multipart/form-data sends everything as strings
+      // Manually parse fields
       const dataToValidate = {
         ...req.body,
         event_paid:
@@ -197,6 +252,7 @@ export const updateEventController = async (req: Request, res: Response) => {
       name,
       description,
       date,
+      end_date,
       location,
       event_type,
       event_paid,
@@ -235,6 +291,7 @@ export const updateEventController = async (req: Request, res: Response) => {
         name: name,
         description: description,
         date: date,
+        endDate: end_date,
         location: location,
         image: image_url,
         eventType: event_type,
@@ -314,16 +371,6 @@ export const registerEventController = async (req: Request, res: Response) => {
     const registration = await prisma.eventRegistration.create({
       data: { userId, eventId: validatedId.id },
     });
-
-    if (!registration) {
-      return res.status(500).send(
-        responseFormatter({
-          code: 500,
-          status: "error",
-          message: "Failed to register for the event.",
-        }),
-      );
-    }
 
     return res.status(201).send(
       responseFormatter({
@@ -457,27 +504,31 @@ export const getAttendeeListController = async (req: Request, res: Response) => 
       );
     }
 
-    const attendees = await prisma.eventRegistration.findMany({
-      where: { eventId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            profilePicture: true,
-          },
-        },
-      },
+    const orders = await prisma.order.findMany({
+        where: { eventId, status: "DONE" },
+        include: {
+            user: {
+                select: { id: true, email: true, firstName: true, lastName: true, profilePicture: true }
+            }
+        }
     });
+
+    const attendeeList = orders.map(order => ({
+        id: order.user.id,
+        firstName: order.user.firstName,
+        lastName: order.user.lastName,
+        email: order.user.email,
+        profilePicture: order.user.profilePicture,
+        ticketQuantity: order.quantity,
+        totalPaid: order.totalPrice.toString()
+    }));
 
     return res.status(200).send(
       responseFormatter({
         code: 200,
         status: "success",
         message: "Attendee list retrieved successfully.",
-        data: attendees.map((reg) => reg.user),
+        data: attendeeList,
       }),
     );
   } catch (error: any) {

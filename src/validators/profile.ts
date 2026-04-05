@@ -2,7 +2,7 @@ import vine, { SimpleMessagesProvider } from "@vinejs/vine";
 
 export const updateProfileValidator = vine.compile(
   vine.object({
-    last_name: vine.string().minLength(1).maxLength(255).optional(),
+    last_name: vine.string().optional(),
   }),
 );
 

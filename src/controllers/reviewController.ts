@@ -21,11 +21,11 @@ export const createReviewController = async (req: Request, res: Response) => {
       );
     }
 
-    const { eventId, rating, comment } = validatedData;
+    const { event_id, rating, comment } = validatedData;
 
     // 1. Check if event exists
     const event = await prisma.event.findUnique({
-      where: { id: eventId, deleted: false },
+      where: { id: event_id, deleted: false },
     });
 
     if (!event) {
@@ -52,7 +52,7 @@ export const createReviewController = async (req: Request, res: Response) => {
     // 3. Check if user was registered/attended (Order status DONE or Registration exists)
     const registration = await prisma.eventRegistration.findUnique({
       where: {
-        userId_eventId: { userId, eventId },
+        userId_eventId: { userId, eventId: event_id },
       },
     });
 
@@ -69,7 +69,7 @@ export const createReviewController = async (req: Request, res: Response) => {
     // 4. Check if user already reviewed
     const existingReview = await prisma.review.findUnique({
       where: {
-        userId_eventId: { userId, eventId },
+        userId_eventId: { userId, eventId: event_id },
       },
     });
 
@@ -88,19 +88,19 @@ export const createReviewController = async (req: Request, res: Response) => {
       const newReview = await tx.review.create({
         data: {
           userId,
-          eventId,
+          eventId: event_id,
           rating,
           comment,
         },
       });
 
       const aggregate = await tx.review.aggregate({
-        where: { eventId },
+        where: { eventId: event_id },
         _avg: { rating: true },
       });
 
       await tx.event.update({
-        where: { id: eventId },
+        where: { id: event_id },
         data: { rating: aggregate._avg.rating || 0 },
       });
 

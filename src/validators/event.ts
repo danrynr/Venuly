@@ -5,6 +5,7 @@ export const createEventValidator = vine.compile(
     name: vine.string().minLength(3).maxLength(255),
     description: vine.string().minLength(10).maxLength(5000),
     date: vine.date(),
+    end_date: vine.date().optional(),
     location: vine.string().minLength(3).maxLength(255),
     event_paid: vine.boolean(),
     event_type: vine.enum([
@@ -24,6 +25,7 @@ export const updateEventValidator = vine.compile(
     name: vine.string().minLength(3).maxLength(255).optional(),
     description: vine.string().minLength(10).maxLength(5000).optional(),
     date: vine.date().optional(),
+    end_date: vine.date().optional(),
     location: vine.string().minLength(3).maxLength(255).optional(),
     event_type: vine
       .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
@@ -58,6 +60,7 @@ vine.messagesProvider = new SimpleMessagesProvider({
   "description.minLength": "Description must be at least 10 characters long.",
   "description.maxLength": "Description must be at most 5000 characters long.",
   "date.date": "Please provide a valid date for the event.",
+  "end_date.date": "Please provide a valid end date for the event.",
   "location.minLength": "Location must be at least 3 characters long.",
   "location.maxLength": "Location must be at most 255 characters long.",
   "image_url.url": "Please provide a valid URL for the event image.",

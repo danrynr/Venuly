@@ -3,16 +3,17 @@ import { prisma } from "../service/prisma";
 import { responseFormatter } from "../middleware/responseFormatter";
 import { createOrderValidator, orderIdValidator } from "../validators/order";
 import { uploadStream } from "../service/cloudinary";
+import { sendMail } from "../service/mail";
 
 export const createOrderController = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
     let validatedData;
 
-    // Manually parse strings from multipart/form-data or body if needed
     const dataToValidate = {
         ...req.body,
         event_id: req.body?.event_id ? Number(req.body.event_id) : undefined,
+        quantity: req.body?.quantity ? Number(req.body.quantity) : 1,
         use_points: req.body?.use_points === "true" || req.body?.use_points === true,
     };
 
@@ -29,57 +30,43 @@ export const createOrderController = async (req: Request, res: Response) => {
       );
     }
 
-    const { event_id, coupon_code, use_points } = validatedData;
+    const { event_id, coupon_code, voucher_code, quantity, use_points } = validatedData;
+    const ticketQuantity = quantity || 1;
 
     // 1. Check event and capacity
-    // Available seats = capacity - (DONE + WAITING_FOR_PAYMENT + WAITING_FOR_ADMIN_CONFIRMATION)
     const event = await prisma.event.findUnique({
       where: { id: event_id, deleted: false },
-      include: {
-        _count: {
-          select: {
-            orders: {
-              where: {
-                status: {
-                  in: ["DONE", "WAITING_FOR_PAYMENT", "WAITING_FOR_ADMIN_CONFIRMATION"],
-                },
-                // For WAITING_FOR_PAYMENT, only count if not expired
-                OR: [
-                  { status: { in: ["DONE", "WAITING_FOR_ADMIN_CONFIRMATION"] } },
-                  { status: "WAITING_FOR_PAYMENT", expiresAt: { gt: new Date() } }
-                ]
-              },
-            },
-          },
-        },
-      },
     });
 
     if (!event) {
-      return res.status(404).send(
-        responseFormatter({
-          code: 404,
-          status: "error",
-          message: "Event not found.",
-        }),
-      );
+      return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "Event not found." }));
     }
 
-    if (event._count.orders >= event.capacity) {
-      return res.status(400).send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: "Event is fully booked.",
-        }),
-      );
+    const activeOrders = await prisma.order.aggregate({
+        where: {
+            eventId: event_id,
+            status: { in: ["DONE", "WAITING_FOR_PAYMENT", "WAITING_FOR_ADMIN_CONFIRMATION"] },
+            OR: [
+                { status: { in: ["DONE", "WAITING_FOR_ADMIN_CONFIRMATION"] } },
+                { status: "WAITING_FOR_PAYMENT", expiresAt: { gt: new Date() } }
+            ]
+        },
+        _sum: { quantity: true }
+    });
+
+    const currentBooked = activeOrders._sum.quantity || 0;
+    if (currentBooked + ticketQuantity > event.capacity) {
+      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Not enough seats available." }));
     }
 
     let discount = 0n;
     let couponId: number | null = null;
+    let voucherId: number | null = null;
     let pointsUsed = 0n;
 
-    // 2. Handle Coupon
+    const basePriceTotal = event.eventPrice * BigInt(ticketQuantity);
+
+    // 2. Handle Referral Coupon
     if (coupon_code) {
       const userCoupon = await prisma.userCoupon.findFirst({
         where: {
@@ -91,19 +78,33 @@ export const createOrderController = async (req: Request, res: Response) => {
       });
 
       if (!userCoupon) {
-        return res.status(400).send(
-          responseFormatter({
-            code: 400,
-            status: "error",
-            message: "Invalid or expired coupon.",
-          }),
-        );
+        return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Invalid or expired coupon." }));
       }
       couponId = userCoupon.id;
-      discount = (event.eventPrice * BigInt(Math.round(userCoupon.discount))) / 100n;
+      discount += (basePriceTotal * BigInt(Math.round(userCoupon.discount))) / 100n;
     }
 
-    // 3. Handle Points
+    // 3. Handle Event-Specific Voucher
+    if (voucher_code) {
+        const voucher = await prisma.voucher.findFirst({
+            where: {
+                code: voucher_code,
+                eventId: event_id,
+                isUsed: false,
+                startDate: { lte: new Date() },
+                endDate: { gte: new Date() },
+                OR: [{ userId: null }, { userId: userId }]
+            }
+        });
+
+        if (!voucher) {
+            return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Invalid or expired event voucher." }));
+        }
+        voucherId = voucher.id;
+        discount += (basePriceTotal * BigInt(Math.round(voucher.discount))) / 100n;
+    }
+
+    // 4. Handle Points
     if (use_points) {
       const userPoints = await prisma.userPoint.findMany({
         where: {
@@ -114,12 +115,12 @@ export const createOrderController = async (req: Request, res: Response) => {
       });
 
       const totalPoints = userPoints.reduce((acc, curr) => acc + curr.points, 0n);
-      const remainingPrice = event.eventPrice - discount;
-      pointsUsed = totalPoints > remainingPrice ? remainingPrice : totalPoints;
+      const remainingPrice = basePriceTotal - discount;
+      pointsUsed = totalPoints > remainingPrice ? (remainingPrice > 0n ? remainingPrice : 0n) : totalPoints;
     }
 
-    const totalPrice = event.eventPrice - discount - pointsUsed;
-    const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes hold
+    const totalPrice = basePriceTotal - discount - pointsUsed;
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.order.create({
@@ -127,7 +128,9 @@ export const createOrderController = async (req: Request, res: Response) => {
           userId,
           eventId: event.id,
           couponId,
-          basePrice: event.eventPrice,
+          voucherId,
+          quantity: ticketQuantity,
+          basePrice: basePriceTotal,
           discount,
           pointsUsed,
           totalPrice: totalPrice < 0n ? 0n : totalPrice,
@@ -136,12 +139,8 @@ export const createOrderController = async (req: Request, res: Response) => {
         },
       });
 
-      if (couponId) {
-        await tx.userCoupon.update({
-          where: { id: couponId },
-          data: { isUsed: true, usedAt: new Date() },
-        });
-      }
+      if (couponId) await tx.userCoupon.update({ where: { id: couponId }, data: { isUsed: true, usedAt: new Date() } });
+      if (voucherId) await tx.voucher.update({ where: { id: voucherId }, data: { isUsed: true, usedAt: new Date() } });
 
       if (pointsUsed > 0n) {
         let remainingToDeduct = pointsUsed;
@@ -153,14 +152,10 @@ export const createOrderController = async (req: Request, res: Response) => {
         for (const pointRecord of activePoints) {
           if (remainingToDeduct <= 0n) break;
           const toDeduct = pointRecord.points > remainingToDeduct ? remainingToDeduct : pointRecord.points;
-          await tx.userPoint.update({
-            where: { id: pointRecord.id },
-            data: { points: pointRecord.points - toDeduct },
-          });
+          await tx.userPoint.update({ where: { id: pointRecord.id }, data: { points: pointRecord.points - toDeduct } });
           remainingToDeduct -= toDeduct;
         }
       }
-
       return newOrder;
     });
 
@@ -168,7 +163,7 @@ export const createOrderController = async (req: Request, res: Response) => {
       responseFormatter({
         code: 201,
         status: "success",
-        message: "Order created. Please proceed to payment within 2 minutes.",
+        message: "Order created. Please proceed to payment within 2 hours.",
         data: {
             ...order,
             basePrice: order.basePrice.toString(),
@@ -179,14 +174,7 @@ export const createOrderController = async (req: Request, res: Response) => {
       }),
     );
   } catch (error: any) {
-    console.error("Create order error:", error);
-    return res.status(500).send(
-      responseFormatter({
-        code: 500,
-        status: "error",
-        message: error.message || "Internal server error.",
-      }),
-    );
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: error.message || "Internal server error." }));
   }
 };
 
@@ -195,107 +183,33 @@ export const payOrderController = async (req: Request, res: Response) => {
     const userId = req.user!.userId;
     const { id } = await orderIdValidator.validate(req.params);
 
-    const order = await prisma.order.findUnique({
-      where: { id, userId },
-    });
+    const order = await prisma.order.findUnique({ where: { id, userId } });
 
-    if (!order) {
-      return res.status(404).send(
-        responseFormatter({
-          code: 404,
-          status: "error",
-          message: "Order not found.",
-        }),
-      );
-    }
-
-    if (order.status !== "WAITING_FOR_PAYMENT") {
-      return res.status(400).send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: `Order status is ${order.status}. Cannot proceed to payment.`,
-        }),
-      );
-    }
+    if (!order) return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "Order not found." }));
+    if (order.status !== "WAITING_FOR_PAYMENT") return res.status(400).send(responseFormatter({ code: 400, status: "error", message: `Invalid status: ${order.status}` }));
 
     if (new Date() > order.expiresAt) {
-      // EXPIRED logic: Restore points and coupons
       await prisma.$transaction(async (tx) => {
-        await tx.order.update({
-          where: { id },
-          data: { status: "EXPIRED" },
-        });
-
-        if (order.couponId) {
-          await tx.userCoupon.update({
-            where: { id: order.couponId },
-            data: { isUsed: false, usedAt: null },
-          });
-        }
-
-        if (order.pointsUsed > 0n) {
-          await tx.userPoint.create({
-            data: {
-              userId: order.userId,
-              points: order.pointsUsed,
-            },
-          });
-        }
+        await tx.order.update({ where: { id }, data: { status: "EXPIRED" } });
+        if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
+        if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });
+        if (order.pointsUsed > 0n) await tx.userPoint.create({ data: { userId: order.userId, points: order.pointsUsed } });
       });
-
-      return res.status(400).send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: "Order has expired. Points and coupons have been restored.",
-        }),
-      );
+      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Order has expired." }));
     }
 
-    if (!req.file) {
-        return res.status(400).send(
-          responseFormatter({
-            code: 400,
-            status: "error",
-            message: "Payment proof image is required.",
-          }),
-        );
-    }
+    if (!req.file) return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Payment proof required." }));
 
     const uploadResult = await uploadStream(req.file.buffer, "payments");
 
-    // Move to confirmation stage
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: { 
-        status: "WAITING_FOR_ADMIN_CONFIRMATION",
-        paymentProof: uploadResult.secure_url,
-      },
+      data: { status: "WAITING_FOR_ADMIN_CONFIRMATION", paymentProof: uploadResult.secure_url },
     });
 
-    return res.status(200).send(
-      responseFormatter({
-        code: 200,
-        status: "success",
-        message: "Payment proof uploaded. Waiting for admin confirmation.",
-        data: {
-            ...updatedOrder,
-            basePrice: updatedOrder.basePrice.toString(),
-            discount: updatedOrder.discount.toString(),
-            pointsUsed: updatedOrder.pointsUsed.toString(),
-            totalPrice: updatedOrder.totalPrice.toString(),
-        },
-      }),
-    );
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Payment proof uploaded.", data: { ...updatedOrder, basePrice: updatedOrder.basePrice.toString(), discount: updatedOrder.discount.toString(), pointsUsed: updatedOrder.pointsUsed.toString(), totalPrice: updatedOrder.totalPrice.toString() } }));
   } catch (error: any) {
-    return res.status(500).send(
-      responseFormatter({
-        code: 500,
-        status: "error",
-        message: error.message || "Internal server error.",
-      }),
-    );
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
   }
 };
 
@@ -303,185 +217,107 @@ export const cancelOrderController = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
     const { id } = await orderIdValidator.validate(req.params);
+    const order = await prisma.order.findUnique({ where: { id, userId } });
 
-    const order = await prisma.order.findUnique({
-      where: { id, userId },
-    });
-
-    if (!order) {
-      return res.status(404).send(
-        responseFormatter({
-          code: 404,
-          status: "error",
-          message: "Order not found.",
-        }),
-      );
-    }
-
-    // Only allow cancellation for WAITING_FOR_PAYMENT or WAITING_FOR_ADMIN_CONFIRMATION
-    if (!["WAITING_FOR_PAYMENT", "WAITING_FOR_ADMIN_CONFIRMATION"].includes(order.status)) {
-       return res.status(400).send(
-        responseFormatter({
-          code: 400,
-          status: "error",
-          message: `Cannot cancel order with status ${order.status}.`,
-        }),
-      );
-    }
+    if (!order) return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "Order not found." }));
+    if (!["WAITING_FOR_PAYMENT", "WAITING_FOR_ADMIN_CONFIRMATION"].includes(order.status)) return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Cannot cancel." }));
 
     await prisma.$transaction(async (tx) => {
-      // 1. Update status
-      await tx.order.update({
-        where: { id },
-        data: { status: "CANCELED" },
-      });
-
-      // 2. Restore Coupon
-      if (order.couponId) {
-        await tx.userCoupon.update({
-          where: { id: order.couponId },
-          data: { isUsed: false, usedAt: null },
-        });
-      }
-
-      // 3. Restore Points
-      if (order.pointsUsed > 0n) {
-        await tx.userPoint.create({
-          data: {
-            userId: order.userId,
-            points: order.pointsUsed,
-          },
-        });
-      }
-      
-      // 4. Registration cleanup (if it existed - though only DONE orders should have registration)
-      await tx.eventRegistration.deleteMany({
-        where: { userId, eventId: order.eventId },
-      });
+      await tx.order.update({ where: { id }, data: { status: "CANCELED" } });
+      if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
+      if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });
+      if (order.pointsUsed > 0n) await tx.userPoint.create({ data: { userId: order.userId, points: order.pointsUsed } });
+      await tx.eventRegistration.deleteMany({ where: { userId, eventId: order.eventId } });
     });
 
-    return res.status(200).send(
-      responseFormatter({
-        code: 200,
-        status: "success",
-        message: "Order canceled. Points, coupons, and seats have been restored.",
-      }),
-    );
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Order canceled." }));
   } catch (error: any) {
-    return res.status(500).send(
-      responseFormatter({
-        code: 500,
-        status: "error",
-        message: error.message || "Internal server error.",
-      }),
-    );
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
   }
 };
 
 export const adminConfirmOrderController = async (req: Request, res: Response) => {
     try {
+        const userId = req.user!.userId;
+        const roles = req.user!.roles;
         const { id } = await orderIdValidator.validate(req.params);
-
-        const order = await prisma.order.findUnique({
-            where: { id },
-        });
+        const order = await prisma.order.findUnique({ where: { id }, include: { user: true, event: true } });
 
         if (!order || order.status !== "WAITING_FOR_ADMIN_CONFIRMATION") {
-            return res.status(400).send(
-                responseFormatter({
-                    code: 400,
-                    status: "error",
-                    message: "Order not found or not waiting for confirmation.",
-                }),
-            );
+            return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Order not pending confirmation." }));
+        }
+
+        // Permission check: Admin or Organizer of the event
+        if (!roles.includes("ADMIN") && order.event.createdBy !== userId) {
+            return res.status(403).send(responseFormatter({ code: 403, status: "error", message: "Forbidden: Not your event." }));
         }
 
         const finalizedOrder = await prisma.$transaction(async (tx) => {
-            const updated = await tx.order.update({
-                where: { id },
-                data: { status: "DONE" },
+            const updated = await tx.order.update({ where: { id }, data: { status: "DONE" } });
+            await tx.eventRegistration.upsert({
+                where: { userId_eventId: { userId: updated.userId, eventId: updated.eventId } },
+                create: { userId: updated.userId, eventId: updated.eventId },
+                update: {}
             });
-
-            await tx.eventRegistration.create({
-                data: {
-                    userId: updated.userId,
-                    eventId: updated.eventId,
-                },
-            });
-
             return updated;
         });
 
-        return res.status(200).send(
-            responseFormatter({
-                code: 200,
-                status: "success",
-                message: "Order confirmed successfully.",
-                data: {
-                    ...finalizedOrder,
-                    totalPrice: finalizedOrder.totalPrice.toString()
-                }
-            }),
-        );
+        await sendMail(order.user.email, "Ticket Order Confirmed!", `<p>Hi ${order.user.firstName}, your ticket for ${order.event.name} is ready!</p>`);
+
+        return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Order confirmed.", data: { ...finalizedOrder, totalPrice: finalizedOrder.totalPrice.toString() } }));
     } catch (error: any) {
-        return res.status(500).send(
-            responseFormatter({
-                code: 500,
-                status: "error",
-                message: error.message || "Internal server error.",
-            }),
-        );
+        return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
     }
 }
+
+export const adminRejectOrderController = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const roles = req.user!.roles;
+    const { id } = await orderIdValidator.validate(req.params);
+    const order = await prisma.order.findUnique({ where: { id }, include: { user: true, event: true } });
+
+    if (!order || order.status !== "WAITING_FOR_ADMIN_CONFIRMATION") {
+      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Order not pending confirmation." }));
+    }
+
+    if (!roles.includes("ADMIN") && order.event.createdBy !== userId) {
+        return res.status(403).send(responseFormatter({ code: 403, status: "error", message: "Forbidden: Not your event." }));
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id }, data: { status: "REJECTED" } });
+      if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
+      if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });
+      if (order.pointsUsed > 0n) await tx.userPoint.create({ data: { userId: order.userId, points: order.pointsUsed } });
+    });
+
+    await sendMail(order.user.email, "Order Payment Rejected", `<p>Your payment for ${order.event.name} was rejected. Rewards restored.</p>`);
+
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Order rejected." }));
+  } catch (error: any) {
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
+  }
+};
 
 export const listOrdersController = async (req: Request, res: Response) => {
   try {
     const user = req.user!;
     const isAdmin = user.roles.includes("ADMIN");
     const isOrganizer = user.roles.includes("ORGANIZER");
-
     const { status, event_id, user_id } = req.query;
 
     const where: any = {};
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (user_id) {
-      where.userId = Number(user_id);
-    }
-
-    // 1. If Organizer, only show orders for their own events
-    if (isOrganizer && !isAdmin) {
-      where.event = {
-        createdBy: user.userId,
-      };
-    }
-
-    // 2. Allow filtering by event_id regardless of role
-    if (event_id) {
-      where.eventId = Number(event_id);
-    }
+    if (status) where.status = status;
+    if (user_id) where.userId = Number(user_id);
+    if (isOrganizer && !isAdmin) where.event = { createdBy: user.userId };
+    if (event_id) where.eventId = Number(event_id);
 
     const orders = await prisma.order.findMany({
       where,
       include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        event: {
-          select: {
-            id: true,
-            name: true,
-            createdBy: true,
-          },
-        },
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        event: { select: { id: true, name: true, createdBy: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -494,21 +330,35 @@ export const listOrdersController = async (req: Request, res: Response) => {
       totalPrice: order.totalPrice.toString(),
     }));
 
-    return res.status(200).send(
-      responseFormatter({
-        code: 200,
-        status: "success",
-        message: "Orders retrieved successfully.",
-        data: formattedOrders,
-      }),
-    );
+    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Orders retrieved.", data: formattedOrders }));
   } catch (error: any) {
-    return res.status(500).send(
-      responseFormatter({
-        code: 500,
-        status: "error",
-        message: error.message || "Internal server error.",
-      }),
-    );
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
   }
+};
+
+export const createVoucherController = async (req: Request, res: Response) => {
+    try {
+        const userId = req.user!.userId;
+        const { event_id, code, discount, start_date, end_date, target_user_id } = req.body;
+
+        const event = await prisma.event.findUnique({ where: { id: Number(event_id) } });
+        if (!event || event.createdBy !== userId) {
+            return res.status(403).send(responseFormatter({ code: 403, status: "error", message: "Unauthorized." }));
+        }
+
+        const voucher = await prisma.voucher.create({
+            data: {
+                eventId: Number(event_id),
+                code,
+                discount: Number(discount),
+                startDate: new Date(start_date),
+                endDate: new Date(end_date),
+                userId: target_user_id ? Number(target_user_id) : null,
+            }
+        });
+
+        return res.status(201).send(responseFormatter({ code: 201, status: "success", message: "Voucher created.", data: voucher }));
+    } catch (error: any) {
+        return res.status(500).send(responseFormatter({ code: 500, status: "error", message: error.message }));
+    }
 };
