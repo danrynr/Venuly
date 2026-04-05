@@ -16,7 +16,7 @@ export const startCronJobs = () => {
       });
 
       for (const order of expiredPaymentOrders) {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           await tx.order.update({
             where: { id: order.id },
             data: { status: "EXPIRED" },
@@ -73,9 +73,10 @@ export const startCronJobs = () => {
             });
           }
         });
-        console.log(`[Cron] Order ${order.id} canceled (no admin action for 3 days).`);
+        console.log(
+          `[Cron] Order ${order.id} canceled (no admin action for 3 days).`,
+        );
       }
-
     } catch (error) {
       console.error("[Cron] Error processing cron jobs:", error);
     }
