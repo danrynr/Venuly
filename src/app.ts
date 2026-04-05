@@ -20,8 +20,14 @@ const PORT: number = Number(process.env.PORT) || 3000;
 app.use("/api", router);
 
 // Start Background Jobs
-startCronJobs();
+if (process.env.NODE_ENV !== "test") {
+  startCronJobs();
+}
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+export default app;

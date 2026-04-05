@@ -2,7 +2,7 @@
   "name": "venuly",
   "version": "1.0.0",
   "description": "Event Management Platform",
-  "main": "app.ts",
+  "main": "src/app.ts",
   "scripts": {
     "start": "tsx ./src/app.ts",
     "dev": "nodemon tsx app.ts",
