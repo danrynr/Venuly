@@ -1,9 +1,13 @@
 import "dotenv/config";
 import express, {
   type Application,
+  Request,
+  Response,
+  NextFunction,
 } from "express";
 import router from "./routes/routes";
 import { startCronJobs } from "./utils/cron";
+import { responseFormatter } from "./middleware/responseFormatter";
 
 // BigInt Serialization Polyfill
 (BigInt.prototype as any).toJSON = function () {

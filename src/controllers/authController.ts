@@ -32,12 +32,14 @@ export const registerController = async (req: Request, res: Response) => {
     try {
       validatedData = await registerValidator.validate(req.body);
     } catch (err: any) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: err.messages,
-      });
-      return res.status(400).send(response);
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: err.messages || "Validation failed.",
+          data: err.errors,
+        }),
+      );
     }
 
     const {
@@ -49,102 +51,91 @@ export const registerController = async (req: Request, res: Response) => {
       referral,
     } = validatedData;
 
-    // if referral code is provided make sure it is exactly 9 characters long
-    if (referral && referral.length !== 9) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Referral code must be exactly 9 characters long.",
-      });
-      return res.status(400).send(response);
+    // Password match check
+    if (password !== verify_password) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Passwords do not match.",
+        }),
+      );
     }
 
-    if (!email || !password || !verify_password || !first_name) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Required fields are missing.",
-      });
-      return res.status(400).send(response);
+    // Referral code check (only if provided and not empty)
+    const sanitizedReferral = referral?.trim();
+    const hasReferral = sanitizedReferral && sanitizedReferral.length > 0;
+
+    if (hasReferral && sanitizedReferral.length !== 9) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Referral code must be exactly 9 characters long.",
+        }),
+      );
     }
 
     // Check if user already exists
-    const existingUser = await prisma.user.findFirst({ where: { email } });
-
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-      const response = responseFormatter({
-        code: 409,
-        status: "error",
-        message: "User with this email already exists.",
-      });
-      return res.status(409).send(response);
+      return res.status(409).send(
+        responseFormatter({
+          code: 409,
+          status: "error",
+          message: "User with this email already exists.",
+        }),
+      );
+    }
+
+    const referralUser = hasReferral
+      ? await prisma.user.findUnique({
+          where: { referralCode: sanitizedReferral },
+        })
+      : null;
+
+    if (hasReferral && !referralUser) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Invalid referral code.",
+        }),
+      );
     }
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const passwordsMatch = await bcrypt.compare(
-      verify_password,
-      hashedPassword,
-    );
-    if (!passwordsMatch) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Password do not match.",
-      });
-      return res.status(400).send(response);
-    }
+    // Create user and referral rewards in a transaction
+    const newUser = await prisma.$transaction(
+      async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            firstName: first_name,
+            lastName: last_name || null,
+            referralCode: generateReferralCode(first_name),
+          },
+        });
 
-    const referralUser = referral
-      ? await prisma.user.findFirst({
-          where: { referralCode: referral },
-        })
-      : null;
+        // Assign default role 'customer'
+        const customerRole = await tx.role.findUnique({
+          where: { name: "customer" },
+        });
+        if (customerRole) {
+          await tx.userRole.create({
+            data: { userId: user.id, roleId: customerRole.id },
+          });
+        }
 
-    if (referral && !referralUser) {
-      const response = responseFormatter({
-        code: 400,
-        status: "error",
-        message: "Invalid referral code.",
-      });
-      return res.status(400).send(response);
-    }
+        // Handle referral logic
+        if (referralUser) {
+          const threeMonthsFromNow = new Date();
+          threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        firstName: first_name,
-        lastName: last_name || null,
-        referralCode: generateReferralCode(first_name),
-      },
-    });
-
-    // Assign default role 'customer'
-    const customerRole = await prisma.role.findFirst({
-      where: { name: "customer" },
-    });
-    if (customerRole) {
-      await prisma.userRole.create({
-        data: {
-          userId: user.id,
-          roleId: customerRole.id,
-        },
-      });
-    }
-
-    if (referralUser) {
-      // Correct date logic for 3 months
-      const threeMonthsFromNow = new Date();
-      threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-
-      await prisma.$transaction(
-        async (tx) => {
           await tx.referral.create({
-            data: {
-              referrerId: referralUser.id,
-              reffereeId: user.id,
-            },
+            data: { referrerId: referralUser.id, reffereeId: user.id },
           });
 
           await tx.userPoint.create({
@@ -163,34 +154,29 @@ export const registerController = async (req: Request, res: Response) => {
               expiredAt: threeMonthsFromNow,
             },
           });
-        },
-        { isolationLevel: "Serializable" },
-      );
-    }
+        }
 
-    if (!user) {
-      const response = responseFormatter({
-        code: 500,
-        status: "error",
-        message: "Failed to create user.",
-      });
-      return res.status(500).send(response);
-    }
+        return user;
+      },
+      { isolationLevel: "Serializable" },
+    );
 
-    const response = responseFormatter({
-      code: 201,
-      status: "success",
-      message: "User registered successfully.",
-    });
-    res.status(201).send(response);
+    return res.status(201).send(
+      responseFormatter({
+        code: 201,
+        status: "success",
+        message: "User registered successfully.",
+      }),
+    );
   } catch (error: any) {
     console.error("Registration error:", error);
-    const response = responseFormatter({
-      code: 500,
-      status: "error",
-      message: "Internal server error.",
-    });
-    res.status(500).send(response);
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: "Internal server error.",
+      }),
+    );
   }
 };
 
@@ -413,16 +399,34 @@ export const logoutController = async (req: Request, res: Response) => {
 export const changePasswordController = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const { oldPassword, newPassword } = await changePasswordValidator.validate(req.body);
+    const { oldPassword, newPassword } = await changePasswordValidator.validate(
+      req.body,
+    );
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "User not found." }));
+      return res
+        .status(404)
+        .send(
+          responseFormatter({
+            code: 404,
+            status: "error",
+            message: "User not found.",
+          }),
+        );
     }
 
     const isMatch = await bcrypt.compare(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Current password incorrect." }));
+      return res
+        .status(400)
+        .send(
+          responseFormatter({
+            code: 400,
+            status: "error",
+            message: "Current password incorrect.",
+          }),
+        );
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
@@ -431,9 +435,25 @@ export const changePasswordController = async (req: Request, res: Response) => {
       data: { password: hashedNewPassword },
     });
 
-    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Password updated successfully." }));
+    return res
+      .status(200)
+      .send(
+        responseFormatter({
+          code: 200,
+          status: "success",
+          message: "Password updated successfully.",
+        }),
+      );
   } catch (error: any) {
-    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
+    return res
+      .status(400)
+      .send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: error.messages || "Request failed.",
+        }),
+      );
   }
 };
 
@@ -443,8 +463,15 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      // Don't leak user existence in production, but requirement says "reset if forgotten"
-      return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "If that email exists, a reset link has been sent." }));
+      return res
+        .status(200)
+        .send(
+          responseFormatter({
+            code: 200,
+            status: "success",
+            message: "If that email exists, a reset link has been sent.",
+          }),
+        );
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -455,24 +482,41 @@ export const forgotPasswordController = async (req: Request, res: Response) => {
       data: { resetPasswordToken: token, resetPasswordExpires: expires },
     });
 
-    // In a real app, this would be a link to your frontend
     const resetLink = `http://localhost:3000/api/auth/reset-password?token=${token}`;
-    
+
     await sendMail(
       user.email,
       "Password Reset Request",
-      `<p>You requested a password reset. Click <a href="${resetLink}">here</a> to reset your password. This link expires in 1 hour.</p>`
+      `<p>You requested a password reset. Click <a href="${resetLink}">here</a> to reset your password. This link expires in 1 hour.</p>`,
     );
 
-    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Reset link sent to your email." }));
+    return res
+      .status(200)
+      .send(
+        responseFormatter({
+          code: 200,
+          status: "success",
+          message: "Reset link sent to your email.",
+        }),
+      );
   } catch (error: any) {
-    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
+    return res
+      .status(400)
+      .send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: error.messages || "Request failed.",
+        }),
+      );
   }
 };
 
 export const resetPasswordController = async (req: Request, res: Response) => {
   try {
-    const { token, newPassword } = await resetPasswordValidator.validate(req.body);
+    const { token, newPassword } = await resetPasswordValidator.validate(
+      req.body,
+    );
 
     const user = await prisma.user.findFirst({
       where: {
@@ -482,7 +526,15 @@ export const resetPasswordController = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Invalid or expired reset token." }));
+      return res
+        .status(400)
+        .send(
+          responseFormatter({
+            code: 400,
+            status: "error",
+            message: "Invalid or expired reset token.",
+          }),
+        );
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
@@ -495,8 +547,24 @@ export const resetPasswordController = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Password reset successfully. You can now log in." }));
+    return res
+      .status(200)
+      .send(
+        responseFormatter({
+          code: 200,
+          status: "success",
+          message: "Password reset successfully. You can now log in.",
+        }),
+      );
   } catch (error: any) {
-    return res.status(400).send(responseFormatter({ code: 400, status: "error", message: error.messages || "Request failed." }));
+    return res
+      .status(400)
+      .send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: error.messages || "Request failed.",
+        }),
+      );
   }
 };

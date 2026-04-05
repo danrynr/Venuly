@@ -10,7 +10,9 @@ import dashboardRouter from "./dashboardRoutes"; // Import the dashboard router
 
 const router: Router = Router();
 
-router.use(requestLogger);
+if (process.env.ENV === "development") {
+  router.use(requestLogger);
+}
 router.use(json());
 router.use(urlencoded({ extended: true }));
 

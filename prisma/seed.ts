@@ -7,6 +7,8 @@ import userSeeder from "./seed/user";
 import userRoleSeeder from "./seed/userRole";
 import eventSeeder from "./seed/event";
 import orderSeeder from "./seed/order";
+import voucherSeeder from "./seed/voucher";
+import reviewSeeder from "./seed/review";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
@@ -21,6 +23,8 @@ async function seeder() {
   await userRoleSeeder();
   await eventSeeder();
   await orderSeeder();
+  await voucherSeeder();
+  await reviewSeeder();
 }
 
 seeder()

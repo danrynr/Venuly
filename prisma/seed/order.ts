@@ -58,6 +58,7 @@ async function orderSeeder() {
       data: {
         userId: user.id,
         eventId: event.id,
+        quantity: 1,
         basePrice,
         discount,
         pointsUsed,
