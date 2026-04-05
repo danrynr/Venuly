@@ -38,6 +38,7 @@ model User {
   userPoints     UserPoint[]
   userCoupons    UserCoupon[]
   orders         Order[]
+  reviews        Review[]
 }
 
 model Role {
@@ -182,6 +183,7 @@ model Event {
   creator       User                @relation(name: "EventCreator", fields: [createdBy], references: [id])
   registrations EventRegistration[]
   orders        Order[]
+  reviews       Review[]
 }
 
 model Order {
@@ -194,6 +196,7 @@ model Order {
   pointsUsed BigInt      @default(0)
   totalPrice BigInt
   status     OrderStatus @default(WAITING_FOR_PAYMENT)
+  paymentProof String?
   expiresAt  DateTime
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
@@ -207,6 +210,21 @@ model EventRegistration {
   id        Int      @id @default(autoincrement())
   userId    Int
   eventId   Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id])
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([userId, eventId])
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  eventId   Int
+  rating    Int      @default(0)
+  comment   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

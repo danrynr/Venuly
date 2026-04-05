@@ -4,13 +4,17 @@ import {
   getProfile,
   updateProfile,
   updateProfilePicture,
+  getOrganizerProfile,
 } from "../controllers/profileController";
 import { authenticateToken } from "../middleware/authMiddleware";
 
 const profileRouter: Router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Apply authenticateToken to all routes in this router
+// Public routes
+profileRouter.get("/organizer/:id", getOrganizerProfile);
+
+// Authenticated routes
 profileRouter.use(authenticateToken);
 
 profileRouter.get("/detail", getProfile);

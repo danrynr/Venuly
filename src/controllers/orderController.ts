@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { prisma } from "../service/prisma";
 import { responseFormatter } from "../middleware/responseFormatter";
 import { createOrderValidator, orderIdValidator } from "../validators/order";
+import { uploadStream } from "../service/cloudinary";
 
 export const createOrderController = async (req: Request, res: Response) => {
   try {
@@ -234,12 +235,10 @@ export const payOrderController = async (req: Request, res: Response) => {
         }
 
         if (order.pointsUsed > 0n) {
-          // Add back points (creating a new point record for simplicity or finding the last one)
           await tx.userPoint.create({
             data: {
               userId: order.userId,
               points: order.pointsUsed,
-              // No expiry specified for restored points, or we could set a default
             },
           });
         }
@@ -254,20 +253,38 @@ export const payOrderController = async (req: Request, res: Response) => {
       );
     }
 
+    if (!req.file) {
+        return res.status(400).send(
+          responseFormatter({
+            code: 400,
+            status: "error",
+            message: "Payment proof image is required.",
+          }),
+        );
+    }
+
+    const uploadResult = await uploadStream(req.file.buffer, "payments");
+
     // Move to confirmation stage
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: { status: "WAITING_FOR_ADMIN_CONFIRMATION" },
+      data: { 
+        status: "WAITING_FOR_ADMIN_CONFIRMATION",
+        paymentProof: uploadResult.secure_url,
+      },
     });
 
     return res.status(200).send(
       responseFormatter({
         code: 200,
         status: "success",
-        message: "Payment received. Waiting for admin confirmation.",
+        message: "Payment proof uploaded. Waiting for admin confirmation.",
         data: {
             ...updatedOrder,
-            totalPrice: updatedOrder.totalPrice.toString()
+            basePrice: updatedOrder.basePrice.toString(),
+            discount: updatedOrder.discount.toString(),
+            pointsUsed: updatedOrder.pointsUsed.toString(),
+            totalPrice: updatedOrder.totalPrice.toString(),
         },
       }),
     );
@@ -416,3 +433,82 @@ export const adminConfirmOrderController = async (req: Request, res: Response) =
         );
     }
 }
+
+export const listOrdersController = async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const isAdmin = user.roles.includes("ADMIN");
+    const isOrganizer = user.roles.includes("ORGANIZER");
+
+    const { status, event_id, user_id } = req.query;
+
+    const where: any = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (user_id) {
+      where.userId = Number(user_id);
+    }
+
+    // 1. If Organizer, only show orders for their own events
+    if (isOrganizer && !isAdmin) {
+      where.event = {
+        createdBy: user.userId,
+      };
+    }
+
+    // 2. Allow filtering by event_id regardless of role
+    if (event_id) {
+      where.eventId = Number(event_id);
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        event: {
+          select: {
+            id: true,
+            name: true,
+            createdBy: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const formattedOrders = orders.map((order) => ({
+      ...order,
+      basePrice: order.basePrice.toString(),
+      discount: order.discount.toString(),
+      pointsUsed: order.pointsUsed.toString(),
+      totalPrice: order.totalPrice.toString(),
+    }));
+
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Orders retrieved successfully.",
+        data: formattedOrders,
+      }),
+    );
+  } catch (error: any) {
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: error.message || "Internal server error.",
+      }),
+    );
+  }
+};

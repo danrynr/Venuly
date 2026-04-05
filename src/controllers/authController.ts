@@ -44,6 +44,16 @@ export const registerController = async (req: Request, res: Response) => {
       referral,
     } = validatedData;
 
+    // if referral code is provided make sure it is exactly 9 characters long
+    if (referral && referral.length !== 9) {
+      const response = responseFormatter({
+        code: 400,
+        status: "error",
+        message: "Referral code must be exactly 9 characters long.",
+      });
+      return res.status(400).send(response);
+    }
+
     if (!email || !password || !verify_password || !first_name) {
       const response = responseFormatter({
         code: 400,

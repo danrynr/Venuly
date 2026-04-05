@@ -6,6 +6,7 @@ import {
   registerEventController,
   leaveEventController,
   eventListController,
+  getAttendeeListController,
 } from "../controllers/eventController";
 import { authenticateToken } from "../middleware/authMiddleware";
 
@@ -20,5 +21,6 @@ eventRouter.post("/create", upload.single("image"), createEventController);
 eventRouter.put("/:id/update", upload.none(), updateEventController);
 eventRouter.post("/:id/register", registerEventController);
 eventRouter.post("/:id/leave", leaveEventController);
+eventRouter.get("/:id/attendees", getAttendeeListController);
 
 export default eventRouter;

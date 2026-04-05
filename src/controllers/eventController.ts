@@ -416,3 +416,77 @@ export const leaveEventController = async (req: Request, res: Response) => {
 };
 
 export const joinedEventsController = async (req: Request, res: Response) => {};
+
+export const getAttendeeListController = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const eventId = Number(req.params.id);
+
+    if (isNaN(eventId)) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Invalid event ID.",
+        }),
+      );
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      select: { createdBy: true },
+    });
+
+    if (!event) {
+      return res.status(404).send(
+        responseFormatter({
+          code: 404,
+          status: "error",
+          message: "Event not found.",
+        }),
+      );
+    }
+
+    if (event.createdBy !== userId) {
+      return res.status(403).send(
+        responseFormatter({
+          code: 403,
+          status: "error",
+          message: "Forbidden: You are not the organizer of this event.",
+        }),
+      );
+    }
+
+    const attendees = await prisma.eventRegistration.findMany({
+      where: { eventId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Attendee list retrieved successfully.",
+        data: attendees.map((reg) => reg.user),
+      }),
+    );
+  } catch (error: any) {
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: error.message || "Internal server error.",
+      }),
+    );
+  }
+};

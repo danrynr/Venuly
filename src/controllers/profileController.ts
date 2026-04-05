@@ -195,3 +195,82 @@ export const updateProfilePicture = async (req: Request, res: Response) => {
     res.status(500).send(response);
   }
 };
+
+export const getOrganizerProfile = async (req: Request, res: Response) => {
+  try {
+    const organizerId = Number(req.params.id);
+
+    if (isNaN(organizerId)) {
+      return res.status(400).send(
+        responseFormatter({
+          code: 400,
+          status: "error",
+          message: "Invalid organizer ID.",
+        }),
+      );
+    }
+
+    const organizer = await prisma.user.findUnique({
+      where: { id: organizerId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        profilePicture: true,
+        createdAt: true,
+        events: {
+          where: { deleted: false, archived: false },
+          orderBy: { date: "desc" },
+        },
+      },
+    });
+
+    if (!organizer) {
+      return res.status(404).send(
+        responseFormatter({
+          code: 404,
+          status: "error",
+          message: "Organizer not found.",
+        }),
+      );
+    }
+
+    // Aggregate ratings
+    const aggregate = await prisma.review.aggregate({
+      where: {
+        event: {
+          createdBy: organizerId,
+        },
+      },
+      _avg: { rating: true },
+      _count: { rating: true },
+    });
+
+    const responseData = {
+      ...organizer,
+      averageRating: aggregate._avg.rating || 0,
+      totalReviews: aggregate._count.rating,
+      events: organizer.events.map((event) => ({
+        ...event,
+        eventPrice: event.eventPrice.toString(),
+      })),
+    };
+
+    return res.status(200).send(
+      responseFormatter({
+        code: 200,
+        status: "success",
+        message: "Organizer profile retrieved successfully.",
+        data: responseData,
+      }),
+    );
+  } catch (error: any) {
+    return res.status(500).send(
+      responseFormatter({
+        code: 500,
+        status: "error",
+        message: error.message || "Internal server error.",
+      }),
+    );
+  }
+};

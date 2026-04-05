@@ -49,3 +49,18 @@ export const authenticateToken = (
   };
   next();
 };
+
+export const hasRole = (roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user || !req.user.roles.some((role) => roles.includes(role))) {
+      return res.status(403).send(
+        responseFormatter({
+          code: 403,
+          status: "error",
+          message: "Forbidden: Access denied.",
+        }),
+      );
+    }
+    next();
+  };
+};

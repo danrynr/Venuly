@@ -15,7 +15,7 @@ const upload = multer();
 orderRouter.use(authenticateToken);
 
 orderRouter.post("/create", upload.none(), createOrderController);
-orderRouter.post("/:id/pay", payOrderController);
+orderRouter.post("/:id/pay", upload.single("payment_proof"), payOrderController);
 orderRouter.post("/:id/cancel", upload.none(), cancelOrderController);
 orderRouter.post("/:id/confirm", adminConfirmOrderController);
 

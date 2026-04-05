@@ -5,6 +5,7 @@ import authRouter from "./authRoutes"; // Import the new auth router
 import profileRouter from "./profileRoutes"; // Import the new profile router
 import eventRouter from "./eventRoutes"; // Import the new event router
 import orderRouter from "./orderRoutes"; // Import the new order router
+import reviewRouter from "./reviewRoutes"; // Import the review router
 
 const router: Router = Router();
 
@@ -26,5 +27,6 @@ router.use("/auth", authRouter); // Use the new auth router
 router.use("/profile", profileRouter); // Use the profile router
 router.use("/event", eventRouter); // Use the event router
 router.use("/order", orderRouter); // Use the order router
+router.use("/review", reviewRouter); // Use the review router
 
 export default router;

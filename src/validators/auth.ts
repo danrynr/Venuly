@@ -14,7 +14,7 @@ export const registerValidator = vine.compile(
     verify_password: vine.string().minLength(8).maxLength(64),
     first_name: vine.string().minLength(2).maxLength(255),
     last_name: vine.string().minLength(1).maxLength(255).optional(),
-    referral: vine.string().minLength(9).maxLength(9).optional(),
+    referral: vine.string().optional(),
   }),
 );
 

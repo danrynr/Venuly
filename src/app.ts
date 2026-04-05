@@ -1,12 +1,9 @@
 import "dotenv/config";
 import express, {
   type Application,
-  Request,
-  Response,
-  NextFunction,
 } from "express";
 import router from "./routes/routes";
-import { responseFormatter } from "./middleware/responseFormatter";
+import { startCronJobs } from "./utils/cron";
 
 // BigInt Serialization Polyfill
 (BigInt.prototype as any).toJSON = function () {
@@ -16,9 +13,10 @@ import { responseFormatter } from "./middleware/responseFormatter";
 const app: Application = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
-// Import routes
-
 app.use("/api", router);
+
+// Start Background Jobs
+startCronJobs();
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
