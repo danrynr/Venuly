@@ -41,7 +41,7 @@ export const orderWorker = new Worker<OrderJobData>(
     if (type === "PAYMENT_EXPIRATION") {
       // If the order is still waiting for payment, mark it as expired
       if (order.status === "WAITING_FOR_PAYMENT") {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           await tx.order.update({
             where: { id: orderId },
             data: { status: "EXPIRED" },
@@ -77,7 +77,7 @@ export const orderWorker = new Worker<OrderJobData>(
     } else if (type === "ADMIN_CONFIRMATION_TIMEOUT") {
       // If the order is still waiting for admin confirmation, mark it as canceled
       if (order.status === "WAITING_FOR_ADMIN_CONFIRMATION") {
-        await prisma.$transaction(async (tx) => {
+        await prisma.$transaction(async (tx: any) => {
           await tx.order.update({
             where: { id: orderId },
             data: { status: "CANCELED" },

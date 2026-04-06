@@ -115,7 +115,7 @@ export const createOrderController = async (req: Request, res: Response) => {
         },
       });
 
-      const totalPoints = userPoints.reduce((acc: bigint, curr) => acc + curr.points, 0n);
+      const totalPoints = userPoints.reduce((acc: bigint, curr: any) => acc + curr.points, 0n);
       const remainingPrice = basePriceTotal - discount;
       pointsUsed = totalPoints > remainingPrice ? (remainingPrice > 0n ? remainingPrice : 0n) : totalPoints;
     }
@@ -267,7 +267,7 @@ export const adminConfirmOrderController = async (req: Request, res: Response) =
             return res.status(403).send(responseFormatter({ code: 403, status: "error", message: "Forbidden: Not your event." }));
         }
 
-        const finalizedOrder = await prisma.$transaction(async (tx) => {
+        const finalizedOrder = await prisma.$transaction(async (tx: any) => {
             const updated = await tx.order.update({ where: { id }, data: { status: "DONE" } });
             await tx.eventRegistration.upsert({
                 where: { userId_eventId: { userId: updated.userId, eventId: updated.eventId } },
@@ -300,7 +300,7 @@ export const adminRejectOrderController = async (req: Request, res: Response) =>
         return res.status(403).send(responseFormatter({ code: 403, status: "error", message: "Forbidden: Not your event." }));
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.order.update({ where: { id }, data: { status: "REJECTED" } });
       if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
       if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });
@@ -337,7 +337,7 @@ export const listOrdersController = async (req: Request, res: Response) => {
       orderBy: { createdAt: "desc" },
     });
 
-    const formattedOrders = orders.map((order) => ({
+    const formattedOrders = orders.map((order: any) => ({
       ...order,
       basePrice: order.basePrice.toString(),
       discount: order.discount.toString(),

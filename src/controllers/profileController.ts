@@ -250,7 +250,7 @@ export const getOrganizerProfile = async (req: Request, res: Response) => {
       ...organizer,
       averageRating: aggregate._avg.rating || 0,
       totalReviews: aggregate._count.rating,
-      events: organizer.events.map((event) => ({
+      events: organizer.events.map((event: any) => ({
         ...event,
         eventPrice: event.eventPrice.toString(),
       })),

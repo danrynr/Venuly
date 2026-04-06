@@ -108,7 +108,7 @@ export const registerController = async (req: Request, res: Response) => {
 
     // Create user and referral rewards in a transaction
     const newUser = await prisma.$transaction(
-      async (tx) => {
+      async (tx: any) => {
         const user = await tx.user.create({
           data: {
             email,
