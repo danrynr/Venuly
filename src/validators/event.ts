@@ -1,74 +1,97 @@
-import vine, { SimpleMessagesProvider } from "@vinejs/vine";
+const getVine = async () => {
+  const { default: vine, SimpleMessagesProvider } = await import("@vinejs/vine");
+  return { vine, SimpleMessagesProvider };
+};
 
-export const createEventValidator = vine.compile(
-  vine.object({
-    name: vine.string().minLength(3).maxLength(255),
-    description: vine.string().minLength(10).maxLength(5000),
-    date: vine.date(),
-    end_date: vine.date().optional(),
-    location: vine.string().minLength(3).maxLength(255),
-    event_paid: vine.boolean(),
-    event_type: vine.enum([
-      "CONFERENCE",
-      "WORKSHOP",
-      "MEETUP",
-      "CONCERT",
-      "FESTIVAL",
-    ]),
-    price: vine.number().min(0).optional(),
-    capacity: vine.number().min(1),
-  }),
-);
+export const createEventValidator = {
+  validate: async (data: any) => {
+    const { vine } = await getVine();
+    return vine.compile(
+      vine.object({
+        name: vine.string().minLength(3).maxLength(255),
+        description: vine.string().minLength(10).maxLength(5000),
+        date: vine.date(),
+        end_date: vine.date().optional(),
+        location: vine.string().minLength(3).maxLength(255),
+        event_paid: vine.boolean(),
+        event_type: vine.enum([
+          "CONFERENCE",
+          "WORKSHOP",
+          "MEETUP",
+          "CONCERT",
+          "FESTIVAL",
+        ]),
+        price: vine.number().min(0).optional(),
+        capacity: vine.number().min(1),
+      }),
+    ).validate(data);
+  }
+};
 
-export const updateEventValidator = vine.compile(
-  vine.object({
-    name: vine.string().minLength(3).maxLength(255).optional(),
-    description: vine.string().minLength(10).maxLength(5000).optional(),
-    date: vine.date().optional(),
-    end_date: vine.date().optional(),
-    location: vine.string().minLength(3).maxLength(255).optional(),
-    event_type: vine
-      .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
-      .optional(),
-    event_paid: vine.boolean().optional(),
-    price: vine.number().min(0).optional(),
-    capacity: vine.number().min(1).optional(),
-    image_url: vine.string().url().optional(),
-  }),
-);
+export const updateEventValidator = {
+  validate: async (data: any) => {
+    const { vine } = await getVine();
+    return vine.compile(
+      vine.object({
+        name: vine.string().minLength(3).maxLength(255).optional(),
+        description: vine.string().minLength(10).maxLength(5000).optional(),
+        date: vine.date().optional(),
+        end_date: vine.date().optional(),
+        location: vine.string().minLength(3).maxLength(255).optional(),
+        event_type: vine
+          .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
+          .optional(),
+        event_paid: vine.boolean().optional(),
+        price: vine.number().min(0).optional(),
+        capacity: vine.number().min(1).optional(),
+        image_url: vine.string().url().optional(),
+      }),
+    ).validate(data);
+  }
+};
 
-export const eventIdValidator = vine.compile(
-  vine.object({
-    id: vine.number().positive(),
-  }),
-);
+export const eventIdValidator = {
+  validate: async (data: any) => {
+    const { vine, SimpleMessagesProvider } = await getVine();
+    const validator = vine.compile(
+      vine.object({
+        id: vine.number().positive(),
+      }),
+    );
+    vine.messagesProvider = new SimpleMessagesProvider({
+      "name.minLength": "Event name must be at least 3 characters long.",
+      "name.maxLength": "Event name must be at most 255 characters long.",
+      "description.minLength": "Description must be at least 10 characters long.",
+      "description.maxLength": "Description must be at most 5000 characters long.",
+      "date.date": "Please provide a valid date for the event.",
+      "end_date.date": "Please provide a valid end date for the event.",
+      "location.minLength": "Location must be at least 3 characters long.",
+      "location.maxLength": "Location must be at most 255 characters long.",
+      "image_url.url": "Please provide a valid URL for the event image.",
+      "event_type.enum":
+        "Event type must be one of: CONFERENCE, WORKSHOP, MEETUP, CONCERT, FESTIVAL.",
+      "event_paid.boolean": "Event paid status must be a boolean.",
+      "price.number": "Price must be a valid number.",
+      "price.min": "Price cannot be negative.",
+      "id.positive": "Event ID must be a positive number.",
+      "id.number": "Event ID must be a valid number.",
+    });
+    return validator.validate(data);
+  }
+};
 
-export const listEventsValidator = vine.compile(
-  vine.object({
-    status: vine.enum(["all", "active", "passed"]).optional(),
-    search: vine.string().optional(),
-    e_paid: vine.boolean().optional(),
-    e_type: vine
-      .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
-      .optional(),
-  }),
-);
-
-vine.messagesProvider = new SimpleMessagesProvider({
-  "name.minLength": "Event name must be at least 3 characters long.",
-  "name.maxLength": "Event name must be at most 255 characters long.",
-  "description.minLength": "Description must be at least 10 characters long.",
-  "description.maxLength": "Description must be at most 5000 characters long.",
-  "date.date": "Please provide a valid date for the event.",
-  "end_date.date": "Please provide a valid end date for the event.",
-  "location.minLength": "Location must be at least 3 characters long.",
-  "location.maxLength": "Location must be at most 255 characters long.",
-  "image_url.url": "Please provide a valid URL for the event image.",
-  "event_type.enum":
-    "Event type must be one of: CONFERENCE, WORKSHOP, MEETUP, CONCERT, FESTIVAL.",
-  "event_paid.boolean": "Event paid status must be a boolean.",
-  "price.number": "Price must be a valid number.",
-  "price.min": "Price cannot be negative.",
-  "id.positive": "Event ID must be a positive number.",
-  "id.number": "Event ID must be a valid number.",
-});
+export const listEventsValidator = {
+  validate: async (data: any) => {
+    const { vine } = await getVine();
+    return vine.compile(
+      vine.object({
+        status: vine.enum(["all", "active", "passed"]).optional(),
+        search: vine.string().optional(),
+        e_paid: vine.boolean().optional(),
+        e_type: vine
+          .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
+          .optional(),
+      }),
+    ).validate(data);
+  }
+};

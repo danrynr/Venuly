@@ -1,9 +1,17 @@
-import vine from "@vinejs/vine";
+const getVine = async () => {
+  const { default: vine } = await import("@vinejs/vine");
+  return vine;
+};
 
-export const createReviewValidator = vine.compile(
-  vine.object({
-    event_id: vine.number(),
-    rating: vine.number().min(1).max(5),
-    comment: vine.string().trim().optional(),
-  }),
-);
+export const createReviewValidator = {
+  validate: async (data: any) => {
+    const vine = await getVine();
+    return vine.compile(
+      vine.object({
+        event_id: vine.number(),
+        rating: vine.number().min(1).max(5),
+        comment: vine.string().trim().optional(),
+      }),
+    ).validate(data);
+  }
+};
