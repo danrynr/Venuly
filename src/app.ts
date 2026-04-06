@@ -6,8 +6,8 @@ import express, {
   NextFunction,
 } from "express";
 import router from "./routes/routes";
-import { startCronJobs } from "./utils/cron";
 import { responseFormatter } from "./middleware/responseFormatter";
+import "./service/queue"; // This starts the worker
 
 // BigInt Serialization Polyfill
 (BigInt.prototype as any).toJSON = function () {
@@ -18,11 +18,6 @@ const app: Application = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
 app.use("/api", router);
-
-// Start Background Jobs
-if (process.env.NODE_ENV !== "test") {
-  startCronJobs();
-}
 
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {

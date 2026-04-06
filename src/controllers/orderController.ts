@@ -4,6 +4,7 @@ import { responseFormatter } from "../middleware/responseFormatter";
 import { createOrderValidator, orderIdValidator } from "../validators/order";
 import { uploadStream } from "../service/cloudinary";
 import { sendMail } from "../service/mail";
+import { orderQueue } from "../service/queue";
 
 export const createOrderController = async (req: Request, res: Response) => {
   try {
@@ -159,6 +160,13 @@ export const createOrderController = async (req: Request, res: Response) => {
       return newOrder;
     });
 
+    // Schedule expiration job (2 hours)
+    await orderQueue.add(
+      `payment-expiration-${order.id}`,
+      { orderId: order.id, type: "PAYMENT_EXPIRATION" },
+      { delay: 2 * 60 * 60 * 1000 },
+    );
+
     return res.status(201).send(
       responseFormatter({
         code: 201,
@@ -206,6 +214,13 @@ export const payOrderController = async (req: Request, res: Response) => {
       where: { id },
       data: { status: "WAITING_FOR_ADMIN_CONFIRMATION", paymentProof: uploadResult.secure_url },
     });
+
+    // Schedule admin confirmation timeout (3 days)
+    await orderQueue.add(
+      `admin-timeout-${updatedOrder.id}`,
+      { orderId: updatedOrder.id, type: "ADMIN_CONFIRMATION_TIMEOUT" },
+      { delay: 3 * 24 * 60 * 60 * 1000 },
+    );
 
     return res.status(200).send(responseFormatter({ code: 200, status: "success", message: "Payment proof uploaded.", data: { ...updatedOrder, basePrice: updatedOrder.basePrice.toString(), discount: updatedOrder.discount.toString(), pointsUsed: updatedOrder.pointsUsed.toString(), totalPrice: updatedOrder.totalPrice.toString() } }));
   } catch (error: any) {
