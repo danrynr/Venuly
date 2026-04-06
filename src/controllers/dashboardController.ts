@@ -62,7 +62,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     });
 
     const topEventsWithDetails = await Promise.all(
-      topEventsByRevenue.map(async (item) => {
+      topEventsByRevenue.map(async (item: any) => {
         const event = await prisma.event.findUnique({
           where: { id: item.eventId },
           select: { name: true },
@@ -127,7 +127,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       take: 5,
     });
 
-    const formattedTransactions = recentTransactions.map((order) => ({
+    const formattedTransactions = recentTransactions.map((order: any) => ({
       id: order.id,
       customer: `${order.user.firstName} ${order.user.lastName || ""}`.trim(),
       event: order.event.name,

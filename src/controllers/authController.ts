@@ -228,7 +228,7 @@ export const loginController = async (req: Request, res: Response) => {
       return res.status(401).send(response);
     }
 
-    const roles = user.userRoles.map((ur) => ur.role.name);
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
 
     const accessToken = generateAccessToken(user, roles);
     const refreshToken = generateRefreshToken(user, roles);
@@ -322,7 +322,7 @@ export const refreshController = async (req: Request, res: Response) => {
       return res.status(403).send(response);
     }
 
-    const roles = user.userRoles.map((ur) => ur.role.name);
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
 
     const newAccessToken = generateAccessToken(user, roles);
     const newRefreshToken = generateRefreshToken(user, roles);

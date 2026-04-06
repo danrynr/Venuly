@@ -115,7 +115,7 @@ export const createOrderController = async (req: Request, res: Response) => {
         },
       });
 
-      const totalPoints = userPoints.reduce((acc, curr) => acc + curr.points, 0n);
+      const totalPoints = userPoints.reduce((acc: bigint, curr) => acc + curr.points, 0n);
       const remainingPrice = basePriceTotal - discount;
       pointsUsed = totalPoints > remainingPrice ? (remainingPrice > 0n ? remainingPrice : 0n) : totalPoints;
     }
@@ -123,7 +123,7 @@ export const createOrderController = async (req: Request, res: Response) => {
     const totalPrice = basePriceTotal - discount - pointsUsed;
     const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
-    const order = await prisma.$transaction(async (tx) => {
+    const order = await prisma.$transaction(async (tx: any) => {
       const newOrder = await tx.order.create({
         data: {
           userId,
@@ -197,7 +197,7 @@ export const payOrderController = async (req: Request, res: Response) => {
     if (order.status !== "WAITING_FOR_PAYMENT") return res.status(400).send(responseFormatter({ code: 400, status: "error", message: `Invalid status: ${order.status}` }));
 
     if (new Date() > order.expiresAt) {
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: any) => {
         await tx.order.update({ where: { id }, data: { status: "EXPIRED" } });
         if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
         if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });
@@ -237,7 +237,7 @@ export const cancelOrderController = async (req: Request, res: Response) => {
     if (!order) return res.status(404).send(responseFormatter({ code: 404, status: "error", message: "Order not found." }));
     if (!["WAITING_FOR_PAYMENT", "WAITING_FOR_ADMIN_CONFIRMATION"].includes(order.status)) return res.status(400).send(responseFormatter({ code: 400, status: "error", message: "Cannot cancel." }));
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.order.update({ where: { id }, data: { status: "CANCELED" } });
       if (order.couponId) await tx.userCoupon.update({ where: { id: order.couponId }, data: { isUsed: false, usedAt: null } });
       if (order.voucherId) await tx.voucher.update({ where: { id: order.voucherId }, data: { isUsed: false, usedAt: null } });

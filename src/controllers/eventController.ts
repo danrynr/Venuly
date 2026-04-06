@@ -513,7 +513,7 @@ export const getAttendeeListController = async (req: Request, res: Response) => 
         }
     });
 
-    const attendeeList = orders.map(order => ({
+    const attendeeList = orders.map((order: any) => ({
         id: order.user.id,
         firstName: order.user.firstName,
         lastName: order.user.lastName,

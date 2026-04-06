@@ -84,8 +84,8 @@ export const createReviewController = async (req: Request, res: Response) => {
     }
 
     // 5. Create review and update event rating in a transaction
-    const review = await prisma.$transaction(async (tx) => {
-      const newReview = await tx.review.create({
+    const review = await prisma.$transaction(async (tx: any) => {
+      const newReview = await tx.review.upsert({
         data: {
           userId,
           eventId: event_id,
