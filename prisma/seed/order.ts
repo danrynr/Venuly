@@ -1,5 +1,5 @@
 import { prisma } from "../seed";
-import { OrderStatus } from "../../generated/prisma/";
+import { OrderStatus } from "../../generated/prisma/client";
 
 async function orderSeeder() {
   const users = await prisma.user.findMany({
