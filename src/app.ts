@@ -8,6 +8,7 @@ import express, {
 import router from "./routes/routes";
 import { responseFormatter } from "./middleware/responseFormatter";
 import "./service/queue"; // This starts the worker
+import cors from "cors";
 
 // BigInt Serialization Polyfill
 (BigInt.prototype as any).toJSON = function () {
@@ -17,6 +18,20 @@ import "./service/queue"; // This starts the worker
 const app: Application = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      const allowedOrigins = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+        : [];
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+  }),
+);
 app.use("/api", router);
 
 if (process.env.NODE_ENV !== "production") {
