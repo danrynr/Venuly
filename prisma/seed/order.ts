@@ -1,5 +1,5 @@
 import { prisma } from "../seed";
-import { OrderStatus } from "../../generated/prisma/client";
+import { OrderStatus } from "../../generated/prisma/";
 
 async function orderSeeder() {
   const users = await prisma.user.findMany({
@@ -30,7 +30,7 @@ async function orderSeeder() {
   for (let i = 0; i < users.length; i++) {
     const user = users[i]!;
     const event = events[i % events.length]!;
-    
+
     let status: OrderStatus;
     if (i < 18) {
       status = "WAITING_FOR_PAYMENT";
