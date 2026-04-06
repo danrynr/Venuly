@@ -11,11 +11,5 @@
       "src": "/(.*)",
       "dest": "src/app.ts"
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/process-expirations",
-      "schedule": "* * * * *"
-    }
   ]
 }
