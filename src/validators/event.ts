@@ -1,75 +1,47 @@
-import { getVine } from "./vine";
+import { z, makeValidator } from "./vine";
 
-export const createEventValidator = {
-  validate: async (data: any) => {
-    const vine = await getVine();
-    return vine.compile(
-      vine.object({
-        name: vine.string().minLength(3).maxLength(255),
-        description: vine.string().minLength(10).maxLength(5000),
-        date: vine.date(),
-        end_date: vine.date().optional(),
-        location: vine.string().minLength(3).maxLength(255),
-        event_paid: vine.boolean(),
-        event_type: vine.enum([
-          "CONFERENCE",
-          "WORKSHOP",
-          "MEETUP",
-          "CONCERT",
-          "FESTIVAL",
-        ]),
-        price: vine.number().min(0).optional(),
-        capacity: vine.number().min(1),
-      }),
-    ).validate(data);
-  }
-};
+const eventTypeEnum = z.enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"]);
 
-export const updateEventValidator = {
-  validate: async (data: any) => {
-    const vine = await getVine();
-    return vine.compile(
-      vine.object({
-        name: vine.string().minLength(3).maxLength(255).optional(),
-        description: vine.string().minLength(10).maxLength(5000).optional(),
-        date: vine.date().optional(),
-        end_date: vine.date().optional(),
-        location: vine.string().minLength(3).maxLength(255).optional(),
-        event_type: vine
-          .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
-          .optional(),
-        event_paid: vine.boolean().optional(),
-        price: vine.number().min(0).optional(),
-        capacity: vine.number().min(1).optional(),
-        image_url: vine.string().url().optional(),
-      }),
-    ).validate(data);
-  }
-};
+export const createEventValidator = makeValidator(
+  z.object({
+    name: z.string().min(3).max(255),
+    description: z.string().min(10).max(5000),
+    date: z.coerce.date(),
+    end_date: z.coerce.date().optional(),
+    location: z.string().min(3).max(255),
+    event_paid: z.boolean(),
+    event_type: eventTypeEnum,
+    price: z.number().min(0).optional(),
+    capacity: z.number().min(1),
+  })
+);
 
-export const eventIdValidator = {
-  validate: async (data: any) => {
-    const vine = await getVine();
-    return vine.compile(
-      vine.object({
-        id: vine.number().positive(),
-      }),
-    ).validate(data);
-  }
-};
+export const updateEventValidator = makeValidator(
+  z.object({
+    name: z.string().min(3).max(255).optional(),
+    description: z.string().min(10).max(5000).optional(),
+    date: z.coerce.date().optional(),
+    end_date: z.coerce.date().optional(),
+    location: z.string().min(3).max(255).optional(),
+    event_type: eventTypeEnum.optional(),
+    event_paid: z.boolean().optional(),
+    price: z.number().min(0).optional(),
+    capacity: z.number().min(1).optional(),
+    image_url: z.string().url().optional(),
+  })
+);
 
-export const listEventsValidator = {
-  validate: async (data: any) => {
-    const vine = await getVine();
-    return vine.compile(
-      vine.object({
-        status: vine.enum(["all", "active", "passed"]).optional(),
-        search: vine.string().optional(),
-        e_paid: vine.boolean().optional(),
-        e_type: vine
-          .enum(["CONFERENCE", "WORKSHOP", "MEETUP", "CONCERT", "FESTIVAL"])
-          .optional(),
-      }),
-    ).validate(data);
-  }
-};
+export const eventIdValidator = makeValidator(
+  z.object({
+    id: z.coerce.number().positive(),
+  })
+);
+
+export const listEventsValidator = makeValidator(
+  z.object({
+    status: z.enum(["all", "active", "passed"]).optional(),
+    search: z.string().optional(),
+    e_paid: z.coerce.boolean().optional(),
+    e_type: eventTypeEnum.optional(),
+  })
+);

@@ -1,15 +1,29 @@
-// @vinejs/vine is ESM-only. Vercel compiles TypeScript with esbuild which
-// converts import("@vinejs/vine") → require("@vinejs/vine") in CJS output,
-// breaking at runtime. Using new Function() hides the import from esbuild
-// so Node.js performs the real dynamic ESM import at runtime.
-let _vine: any = null;
+import { z } from "zod";
 
-const _dynamicImport = new Function("m", "return import(m)");
+export { z };
 
-export async function getVine(): Promise<typeof import("@vinejs/vine").default> {
-  if (!_vine) {
-    const mod = await _dynamicImport("@vinejs/vine");
-    _vine = mod.default;
+export class ValidationError extends Error {
+  messages: string[];
+  errors: { field: string; message: string; rule: string }[];
+
+  constructor(zodError: z.ZodError) {
+    super("Validation failed");
+    this.name = "ValidationError";
+    this.messages = zodError.issues.map((i) => i.message);
+    this.errors = zodError.issues.map((i) => ({
+      field: i.path.join(".") || "value",
+      message: i.message,
+      rule: i.code,
+    }));
   }
-  return _vine;
+}
+
+export function makeValidator<T extends z.ZodTypeAny>(schema: T) {
+  return {
+    validate: async (data: unknown): Promise<z.infer<T>> => {
+      const result = schema.safeParse(data);
+      if (!result.success) throw new ValidationError(result.error);
+      return result.data;
+    },
+  };
 }

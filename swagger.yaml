@@ -59,6 +59,7 @@ components:
         - EXPIRED
 
 tags:
+  - name: General
   - name: Auth
   - name: Profile
   - name: Event
@@ -67,6 +68,28 @@ tags:
   - name: Dashboard
 
 paths:
+  # ─── General ─────────────────────────────────────────────────────────────────
+
+  /status:
+    get:
+      tags: [General]
+      summary: Check API health
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      meta:
+                        type: object
+                        properties:
+                          message:
+                            example: API is running
+
   # ─── Auth ────────────────────────────────────────────────────────────────────
 
   /auth/register:
