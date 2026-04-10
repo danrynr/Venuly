@@ -7,7 +7,7 @@
     "start": "tsx ./src/app.ts",
     "dev": "nodemon tsx app.ts",
     "postinstall": "prisma generate",
-    "build": "npx prisma generate && tsc",
+    "build": "npx prisma generate && npx prisma migrate deploy && tsc",
     "db:generate": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev",
     "db:migrate:reset": "npx prisma migrate reset",
