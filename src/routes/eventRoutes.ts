@@ -22,9 +22,9 @@ eventRouter.use(authenticateToken);
 
 // Create event (Metadata only - fast)
 eventRouter.post(
-  "/create", 
-  hasRole(["ADMIN", "ORGANIZER"]), 
-  upload.none(), 
+  "/create",
+  hasRole(["ADMIN", "ORGANIZER"]),
+  upload.none(),
   createEventController
 );
 
@@ -37,9 +37,9 @@ eventRouter.patch(
 );
 
 eventRouter.put(
-  "/:id/update", 
-  hasRole(["ADMIN", "ORGANIZER"]), 
-  upload.none(), 
+  "/:id/update",
+  hasRole(["ADMIN", "ORGANIZER"]),
+  upload.none(),
   updateEventController
 );
 
@@ -47,8 +47,8 @@ eventRouter.post("/:id/register", registerEventController);
 eventRouter.post("/:id/leave", leaveEventController);
 
 eventRouter.get(
-  "/:id/attendees", 
-  hasRole(["ADMIN", "ORGANIZER"]), 
+  "/:id/attendees",
+  hasRole(["ADMIN", "ORGANIZER"]),
   getAttendeeListController
 );
 

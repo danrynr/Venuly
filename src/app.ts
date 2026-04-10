@@ -9,6 +9,8 @@ import router from "./routes/routes";
 import { responseFormatter } from "./middleware/responseFormatter";
 import "./service/queue"; // This starts the worker
 import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./swagger";
 
 // BigInt Serialization Polyfill
 (BigInt.prototype as any).toJSON = function () {
@@ -32,6 +34,7 @@ app.use(
     },
   }),
 );
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api", router);
 
 if (process.env.NODE_ENV !== "production") {
