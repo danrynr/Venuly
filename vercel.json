@@ -1,17 +1,22 @@
 {
   "version": 2,
+  "functions": {
+    "api/app.ts": {
+      "includeFiles": "swagger.yaml"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/app.js"
+      "destination": "/api/app.ts"
     },
     {
       "source": "/docs",
-      "destination": "/api/app.js"
+      "destination": "/api/app.ts"
     },
     {
       "source": "/docs/swagger.json",
-      "destination": "/api/app.js"
+      "destination": "/api/app.ts"
     }
   ]
 }
