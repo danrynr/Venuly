@@ -19,6 +19,8 @@ import { swaggerSpec } from "./swagger";
 const app: Application = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(
   cors({
     origin: (origin, callback) => {

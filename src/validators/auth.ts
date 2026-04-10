@@ -1,7 +1,4 @@
-const getVine = async () => {
-  const { default: vine } = await import("@vinejs/vine");
-  return vine;
-};
+import { getVine } from "./vine";
 
 export const registerValidator = {
   validate: async (data: any) => {
