@@ -6,6 +6,7 @@ import {
   adminConfirmOrderController,
   adminRejectOrderController,
   listOrdersController,
+  getMyOrdersController,
   createVoucherController,
 } from "../controllers/orderController";
 import { authenticateToken, hasRole } from "../middleware/authMiddleware";
@@ -18,6 +19,7 @@ const upload = multer();
 orderRouter.use(authenticateToken);
 
 orderRouter.get("/list", hasRole(["ADMIN", "ORGANIZER"]), listOrdersController);
+orderRouter.get("/my", hasRole(["CUSTOMER"]), getMyOrdersController);
 orderRouter.post("/create", upload.none(), createOrderController);
 orderRouter.post("/:id/pay", upload.single("payment_proof"), payOrderController);
 orderRouter.post("/:id/cancel", upload.none(), cancelOrderController);

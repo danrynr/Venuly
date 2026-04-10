@@ -351,6 +351,40 @@ export const listOrdersController = async (req: Request, res: Response) => {
   }
 };
 
+export const getMyOrdersController = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { status } = req.query;
+
+    const where: any = { userId };
+    if (status) where.status = status;
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        event: { select: { id: true, name: true, date: true, location: true, image: true } },
+        coupon: { select: { couponCode: true, discount: true } },
+        voucher: { select: { code: true, discount: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const formattedOrders = orders.map((order: any) => ({
+      ...order,
+      basePrice: order.basePrice.toString(),
+      discount: order.discount.toString(),
+      pointsUsed: order.pointsUsed.toString(),
+      totalPrice: order.totalPrice.toString(),
+    }));
+
+    return res.status(200).send(
+      responseFormatter({ code: 200, status: "success", message: "Orders retrieved.", data: formattedOrders }),
+    );
+  } catch (error: any) {
+    return res.status(500).send(responseFormatter({ code: 500, status: "error", message: "Internal server error." }));
+  }
+};
+
 export const createVoucherController = async (req: Request, res: Response) => {
     try {
         const userId = req.user!.userId;

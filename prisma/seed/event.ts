@@ -46,7 +46,8 @@ async function eventSeeder() {
     {
       id: 4,
       name: "IT Infrastructure Seminar",
-      description: "A seminar focused on IT infrastructure and cloud solutions.",
+      description:
+        "A seminar focused on IT infrastructure and cloud solutions.",
       date: new Date("2026-03-15T17:00:00Z"),
       endDate: new Date("2026-03-15T21:00:00Z"),
       location: "Jakarta, Indonesia",

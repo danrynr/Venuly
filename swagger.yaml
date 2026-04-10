@@ -643,6 +643,28 @@ paths:
         '403':
           description: Forbidden
 
+  /order/my:
+    get:
+      tags: [Order]
+      summary: List my orders (customer only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+          description: Filter by order status
+      responses:
+        '200':
+          description: Orders retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Unauthorized
+
   /order/create:
     post:
       tags: [Order]
