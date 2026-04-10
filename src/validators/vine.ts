@@ -1,11 +1,15 @@
-// Singleton import — resolved once at startup, not re-imported per request.
-// This ensures Vercel's bundler (NFT) can trace the ESM dynamic import correctly.
+// @vinejs/vine is ESM-only. Vercel compiles TypeScript with esbuild which
+// converts import("@vinejs/vine") → require("@vinejs/vine") in CJS output,
+// breaking at runtime. Using new Function() hides the import from esbuild
+// so Node.js performs the real dynamic ESM import at runtime.
 let _vine: any = null;
 
-export async function getVine() {
+const _dynamicImport = new Function("m", "return import(m)");
+
+export async function getVine(): Promise<typeof import("@vinejs/vine").default> {
   if (!_vine) {
-    const mod = await import("@vinejs/vine");
+    const mod = await _dynamicImport("@vinejs/vine");
     _vine = mod.default;
   }
-  return _vine as typeof import("@vinejs/vine").default;
+  return _vine;
 }
