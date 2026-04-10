@@ -10,7 +10,7 @@
       "destination": "/api/app.js"
     },
     {
-      "source": "/docs/(.*)",
+      "source": "/docs/swagger.json",
       "destination": "/api/app.js"
     }
   ]
