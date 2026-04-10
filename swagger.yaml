@@ -120,6 +120,11 @@ paths:
                 referral:
                   type: string
                   description: 9-character referral code (optional)
+                role:
+                  type: string
+                  enum: [customer, organizer]
+                  default: customer
+                  description: Account role (defaults to customer)
       responses:
         '201':
           description: User registered successfully

@@ -49,6 +49,7 @@ export const registerController = async (req: Request, res: Response) => {
       first_name,
       last_name,
       referral,
+      role,
     } = validatedData;
 
     // Password match check
@@ -119,13 +120,13 @@ export const registerController = async (req: Request, res: Response) => {
           },
         });
 
-        // Assign default role 'customer'
-        const customerRole = await tx.role.findUnique({
-          where: { name: "customer" },
+        // Assign role based on request (defaults to 'customer')
+        const assignedRole = await tx.role.findUnique({
+          where: { name: role },
         });
-        if (customerRole) {
+        if (assignedRole) {
           await tx.userRole.create({
-            data: { userId: user.id, roleId: customerRole.id },
+            data: { userId: user.id, roleId: assignedRole.id },
           });
         }
 
