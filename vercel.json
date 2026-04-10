@@ -8,15 +8,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/app.ts"
+      "destination": "/api/app.js"
     },
     {
       "source": "/docs",
-      "destination": "/api/app.ts"
+      "destination": "/api/app.js"
     },
     {
       "source": "/docs/swagger.json",
-      "destination": "/api/app.ts"
+      "destination": "/api/app.js"
     }
   ]
 }
