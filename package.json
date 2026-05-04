@@ -20,7 +20,7 @@
     "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "bcrypt": "^6.0.0",
-    "bullmq": "^5.73.0",
+    "bullmq": "^5.76.5",
     "cloudinary": "^2.9.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
